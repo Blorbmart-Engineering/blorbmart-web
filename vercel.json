@@ -1,0 +1,52 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "comment": "The worker must be re-fetched on every load, or a shipped fix sits behind a cached worker until the browser decides otherwise. Its scope has to be the site root to control every route.",
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "comment": "The manifest changes about as often as the worker does.",
+      "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Content-Type", "value": "application/manifest+json" }
+      ]
+    },
+    {
+      "comment": "Vite fingerprints these, so a cached hit can never be the wrong version.",
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/icons/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        {
+          "comment": "Geolocation is used by the address sheet; the rest are refused outright.",
+          "key": "Permissions-Policy",
+          "value": "geolocation=(self), camera=(), microphone=(), payment=()"
+        }
+      ]
+    }
+  ]
+}

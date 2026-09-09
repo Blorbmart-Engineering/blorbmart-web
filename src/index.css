@@ -1,0 +1,425 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BLORBMART — Colour System (web)
+
+   A 1:1 port of lib/core/theme/blorb_colors.dart, blorb_tokens.dart and
+   blorb_type.dart. Every value here has a counterpart in the Flutter app,
+   and the two must not drift: the web build is the same product, not a
+   companion to it.
+
+   Anchored on the logo azure (#1F77F1). Blue owns brand, navigation and
+   trust; a warm coral/amber family owns appetite — prices, food CTAs and
+   promo energy. Neutrals are cool-tinted so photography of food (which is
+   overwhelmingly warm) pops off the page.
+
+   Light only, deliberately — matching `themeMode: ThemeMode.light` in
+   main.dart. The catalogue is photography, and one bright, colour-accurate
+   surface is the right stage for it.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Brand — azure ─────────────────────────────────────────────────── */
+  --color-brand:         #1F77F1;
+  --color-brand-pressed: #1560D6;
+  --color-brand-hover:   #3D8BF5;
+  --color-brand-soft:    #E7F0FE;
+  --color-brand-softer:  #F3F8FF;
+  --color-brand-ink:     #0B3E86;
+
+  /* ── Appetite — coral / amber ──────────────────────────────────────── */
+  --color-appetite:      #FF5A1F;
+  --color-appetite-deep: #E04212;
+  --color-appetite-soft: #FFEDE6;
+  --color-amber:         #FFB020;
+  --color-amber-soft:    #FFF6E5;
+
+  /* ── Ink — text ────────────────────────────────────────────────────── */
+  --color-ink:          #0B1220;
+  --color-ink-strong:   #16202F;
+  --color-ink-body:     #39455A;
+  --color-ink-muted:    #6B7891;
+  --color-ink-faint:    #9AA6BC;
+  --color-ink-disabled: #BFC8D8;
+
+  /* ── Surfaces ──────────────────────────────────────────────────────── */
+  --color-canvas:         #F6F8FC;
+  --color-surface:        #FFFFFF;
+  --color-surface-sunken: #F1F4F9;
+  --color-surface-raised: #FFFFFF;
+
+  /* ── Lines ─────────────────────────────────────────────────────────── */
+  --color-line:        #E9EDF4;
+  --color-line-strong: #D7DEEA;
+
+  /* ── Semantic ──────────────────────────────────────────────────────── */
+  --color-success:      #0FA968;
+  --color-success-soft: #E6F7F0;
+  --color-warning:      #F79009;
+  --color-warning-soft: #FFF6E5;
+  --color-danger:       #E5484D;
+  --color-danger-soft:  #FDEDEE;
+
+  /* ── Verticals — each hub gets an identity colour ──────────────────── */
+  --color-restaurants:      #FF5A1F;
+  --color-restaurants-soft: #FFEFE8;
+  --color-pharmacy:         #0FA968;
+  --color-pharmacy-soft:    #E6F7F0;
+  --color-events:           #7C5CFF;
+  --color-events-soft:      #F0EBFF;
+  --color-bills:            #1F77F1;
+  --color-bills-soft:       #E7F0FE;
+
+  /* ── Corner radii. Blorbmart is a soft brand — nothing sharper than 8. */
+  --radius-xs:    8px;
+  --radius-sm:   10px;
+  --radius-md:   14px;
+  --radius-lg:   18px;
+  --radius-xl:   22px;
+  --radius-2xl:  28px;
+  --radius-sheet: 30px;
+  --radius-pill: 999px;
+
+  /* ── Type ──────────────────────────────────────────────────────────── */
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+
+  /* ── Motion. One vocabulary for the whole app. ─────────────────────── */
+  --ease-emphasized:     cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized-in:  cubic-bezier(0.3, 0, 0.8, 0.15);
+  --ease-emphasized-out: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-snappy:         cubic-bezier(0.34, 1.2, 0.64, 1);
+  --ease-springy:        cubic-bezier(0.18, 1.5, 0.4, 1);
+  --ease-gentle:         cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Runtime tokens — the values components read directly.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: light;
+
+  /* Spacing scale — 4pt base, from Gap in blorb_tokens.dart. */
+  --gap-xxs:   2px;
+  --gap-xs:    4px;
+  --gap-sm:    8px;
+  --gap-md:   12px;
+  --gap-lg:   16px;
+  --gap-xl:   20px;
+  --gap-xxl:  24px;
+  --gap-xxxl: 32px;
+  --gap-huge: 40px;
+  --gap-giant: 56px;
+  /* Horizontal page padding. Every screen uses this so left edges align. */
+  --gap-page: 20px;
+
+  /* Fixed component sizes so touch targets stay honest (min 44px). */
+  --size-touch-min:   44px;
+  --size-button-sm:   40px;
+  --size-button-md:   50px;
+  --size-button-lg:   56px;
+  --size-input:       54px;
+  --size-search-bar:  52px;
+  --size-nav-bar:     68px;
+  --size-cart-bar:    66px;
+  --size-avatar-sm:   32px;
+  --size-avatar-md:   44px;
+  --size-avatar-lg:   64px;
+  --size-vendor-logo: 56px;
+  --size-hero-image: 220px;
+  --size-dish-thumb:  92px;
+
+  /* Durations, from Motion in blorb_tokens.dart. */
+  --dur-instant:  90ms;
+  --dur-micro:   140ms;
+  --dur-fast:    200ms;
+  --dur-normal:  280ms;
+  --dur-slow:    420ms;
+  --dur-hero:    560ms;
+  --dur-ambient: 2400ms;
+  --dur-stagger:  55ms;
+
+  /* Elevation — soft, wide, low-opacity. Never a hard drop shadow. */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-sm: 0 2px 8px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.03);
+  --shadow-md: 0 8px 20px rgba(16, 24, 40, 0.08), 0 2px 4px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 16px 36px rgba(16, 24, 40, 0.10), 0 4px 8px rgba(16, 24, 40, 0.05);
+  /* Sits under the floating cart bar / bottom nav. */
+  --shadow-lift: 0 -6px 28px rgba(16, 24, 40, 0.12);
+  /* Brand-tinted glow for the primary CTA. */
+  --shadow-brand: 0 8px 20px rgba(31, 119, 241, 0.30);
+  --shadow-appetite: 0 8px 20px rgba(255, 90, 31, 0.30);
+
+  --scrim: rgba(16, 24, 40, 0.40);
+
+  /* Shimmer pair for skeleton loaders. */
+  --shimmer-base: #EDF1F7;
+  --shimmer-highlight: #F8FAFD;
+
+  /* The signature gradient — home header, primary CTA, tracking hero. */
+  --gradient-brand: linear-gradient(135deg, #2F86F7 0%, #1F77F1 45%, #1560D6 100%);
+  --gradient-appetite: linear-gradient(90deg, #FF7A3D 0%, #FF5A1F 100%);
+  /* Scrim laid over food photography so white text stays legible at AA. */
+  --gradient-image-scrim: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.08) 45%,
+    rgba(0, 0, 0, 0.70) 100%
+  );
+
+  /* Safe areas — the whole reason the PWA can look native on a notched
+     iPhone. Read as variables so components never repeat the env() dance. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Base
+   ═══════════════════════════════════════════════════════════════════════ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-canvas);
+  /* Caps text scaling the way main.dart clamps textScaler to 0.9–1.3:
+     accessibility settings above that break dense layouts like the basket
+     and the PIN card. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* A standalone PWA must not rubber-band the whole document, or the app
+     peels away from the status bar the way a web page does and stops
+     reading as an app. Scrolling happens inside the screen container. */
+  overscroll-behavior-y: none;
+}
+
+/* The app is a single column locked to portrait on mobile (main.dart sets
+   DeviceOrientation.portraitUp). On a wide screen we centre that column
+   rather than stretching layouts that were never designed to be wide. */
+#root {
+  min-height: 100dvh;
+  max-width: 520px;
+  margin-inline: auto;
+  background: var(--color-canvas);
+  position: relative;
+}
+
+@media (min-width: 521px) {
+  body {
+    background: #E8EDF5;
+  }
+  #root {
+    box-shadow: 0 0 0 1px var(--color-line);
+  }
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  /* iOS zooms the viewport when a focused input is under 16px. Everything
+     the customer types into is held at 16px, whatever the label does. */
+  font-size: 16px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Typography — BlorbText, as utility classes.
+   Plus Jakarta Sans throughout: geometric enough to feel engineered, round
+   enough to feel appetising, and its numerals sit on an even width — which
+   matters a lot in an app where prices stack vertically.
+   ═══════════════════════════════════════════════════════════════════════ */
+.t-display-lg { font-size: 38px; font-weight: 800; line-height: 1.08; letter-spacing: -1px;   color: var(--color-ink); }
+.t-display-md { font-size: 30px; font-weight: 800; line-height: 1.12; letter-spacing: -0.7px; color: var(--color-ink); }
+.t-display-sm { font-size: 26px; font-weight: 800; line-height: 1.15; letter-spacing: -0.5px; color: var(--color-ink); }
+
+.t-h1 { font-size: 22px; font-weight: 800; line-height: 1.2;  letter-spacing: -0.4px; color: var(--color-ink); }
+.t-h2 { font-size: 19px; font-weight: 700; line-height: 1.25; letter-spacing: -0.3px; color: var(--color-ink); }
+.t-h3 { font-size: 17px; font-weight: 700; line-height: 1.3;  letter-spacing: -0.2px; color: var(--color-ink); }
+.t-h4 { font-size: 15px; font-weight: 700; line-height: 1.35; color: var(--color-ink); }
+
+.t-body-lg { font-size: 16px; font-weight: 500; line-height: 1.5;  color: var(--color-ink-body); }
+.t-body    { font-size: 14px; font-weight: 500; line-height: 1.5;  color: var(--color-ink-body); }
+.t-body-sm { font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--color-ink-muted); }
+
+.t-label-lg { font-size: 15px;   font-weight: 700; line-height: 1.2; color: var(--color-ink); }
+.t-label    { font-size: 13.5px; font-weight: 700; line-height: 1.2; color: var(--color-ink); }
+.t-label-sm { font-size: 12px;   font-weight: 700; line-height: 1.2; letter-spacing: 0.1px; color: var(--color-ink); }
+
+.t-caption    { font-size: 12px; font-weight: 600; line-height: 1.35; color: var(--color-ink-muted); }
+.t-caption-sm { font-size: 11px; font-weight: 600; line-height: 1.3;  color: var(--color-ink-faint); }
+
+/* All-caps section eyebrow. Use sparingly. */
+.t-overline {
+  font-size: 11px; font-weight: 800; line-height: 1.2;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+
+/* Money — tabular so columns of prices line up. */
+.t-price-lg, .t-price, .t-price-sm, .t-price-struck, .t-pin {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.t-price-lg { font-size: 24px; font-weight: 800; letter-spacing: -0.6px; color: var(--color-ink); }
+.t-price    { font-size: 15px; font-weight: 800; letter-spacing: -0.2px; color: var(--color-ink); }
+.t-price-sm { font-size: 13px; font-weight: 800; color: var(--color-ink); }
+.t-price-struck {
+  font-size: 12.5px; font-weight: 600;
+  color: var(--color-ink-faint);
+  text-decoration: line-through;
+}
+/* The 4-digit delivery PIN. Wide tracking, tabular, unmistakable. */
+.t-pin { font-size: 32px; font-weight: 800; color: var(--color-ink); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Motion primitives
+   ═══════════════════════════════════════════════════════════════════════ */
+@keyframes blorb-fade-slide-in {
+  from { opacity: 0; transform: translate3d(var(--fs-x, 0px), var(--fs-y, 14px), 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes blorb-shimmer {
+  from { background-position: -160% 0; }
+  to   { background-position: 260% 0; }
+}
+
+/* The live dot on an in-flight order. */
+@keyframes blorb-pulse-ring {
+  0%   { transform: scale(0.85); opacity: 0.55; }
+  70%  { transform: scale(1.9);  opacity: 0; }
+  100% { transform: scale(1.9);  opacity: 0; }
+}
+
+@keyframes blorb-spin { to { transform: rotate(360deg); } }
+
+@keyframes blorb-sheen {
+  from { transform: translateX(-120%) skewX(-18deg); }
+  to   { transform: translateX(220%) skewX(-18deg); }
+}
+
+@keyframes blorb-pop {
+  0%   { transform: scale(0.7);  opacity: 0; }
+  60%  { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+@keyframes blorb-sheet-up {
+  from { transform: translate3d(0, 100%, 0); }
+  to   { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes blorb-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.blorb-fade-slide-in {
+  animation: blorb-fade-slide-in var(--dur-slow) var(--ease-emphasized) both;
+}
+
+.blorb-skeleton {
+  background: linear-gradient(
+      90deg,
+      var(--shimmer-base) 0%,
+      var(--shimmer-highlight) 50%,
+      var(--shimmer-base) 100%
+    )
+    0 0 / 220% 100%;
+  animation: blorb-shimmer 1.6s linear infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Press-scale. PressScale in blorb_motion.dart, as a class: near-instant
+   response on the way down, gentle release on the way back. */
+.press {
+  transition: transform var(--dur-instant) var(--ease-snappy);
+  touch-action: manipulation;
+}
+.press:active {
+  transform: scale(var(--press-scale, 0.972));
+}
+.press[aria-disabled="true"]:active {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .press:active { transform: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Utilities
+   ═══════════════════════════════════════════════════════════════════════ */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Horizontal rails snap the way a Flutter PageView does. */
+.rail {
+  display: flex;
+  gap: var(--gap-md);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  padding-inline: var(--gap-page);
+  scrollbar-width: none;
+}
+.rail::-webkit-scrollbar { display: none; }
+.rail > * { scroll-snap-align: start; flex: 0 0 auto; }
+
+.clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}

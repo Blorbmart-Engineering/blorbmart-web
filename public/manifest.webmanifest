@@ -1,0 +1,60 @@
+{
+  "id": "/",
+  "name": "Blorbmart",
+  "short_name": "Blorbmart",
+  "description": "Restaurants, pharmacies, event tickets and your monthly bills. One app, one basket, one rider.",
+  "start_url": "/home",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#F6F8FC",
+  "theme_color": "#1F77F1",
+  "lang": "en-NG",
+  "dir": "ltr",
+  "categories": ["food", "shopping", "lifestyle"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/icons/icon-48.png", "sizes": "48x48", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-72.png", "sizes": "72x72", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-256.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Track my order",
+      "short_name": "Orders",
+      "description": "See where your food is",
+      "url": "/orders",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Pay a bill",
+      "short_name": "Bills",
+      "description": "Airtime, data, power and TV",
+      "url": "/bills",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "My wallet",
+      "short_name": "Wallet",
+      "description": "Balance and top-ups",
+      "url": "/wallet",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Search",
+      "short_name": "Search",
+      "description": "Find a dish or a store",
+      "url": "/search",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    }
+  ]
+}

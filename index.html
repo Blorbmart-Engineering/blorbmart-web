@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover is what lets the app paint under a notch; the
+         safe-area variables in index.css then keep content clear of it. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes"
+    />
+
+    <title>Blorbmart — Everything you are hungry for</title>
+    <meta
+      name="description"
+      content="Restaurants, pharmacies, event tickets and your monthly bills. One app, one basket, one rider."
+    />
+
+    <!-- Matches --color-brand, so the Android status bar and the task
+         switcher card carry the brand rather than a browser default. -->
+    <meta name="theme-color" content="#1F77F1" />
+    <meta name="color-scheme" content="light" />
+
+    <!-- ── PWA ─────────────────────────────────────────────────────── -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+
+    <!--
+      iOS reads none of the manifest. Everything that makes an installed
+      Blorbmart look like an app on an iPhone is declared here instead:
+      the icon, the standalone flag, the title under the icon, and a status
+      bar that blends into the blue header rather than sitting on white.
+    -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/icons/apple-touch-icon-120.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/apple-touch-icon-152.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/icons/apple-touch-icon-167.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Blorbmart" />
+    <meta name="application-name" content="Blorbmart" />
+
+    <!-- Social preview: a shared storefront link is a real acquisition channel -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Blorbmart" />
+    <meta property="og:title" content="Blorbmart — Everything you are hungry for" />
+    <meta
+      property="og:description"
+      content="Restaurants, pharmacies, event tickets and your monthly bills. One app, one basket, one rider."
+    />
+    <meta property="og:image" content="/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
+
+    <!--
+      Fonts: preconnect both hosts, then load one variable family.
+      Plus Jakarta Sans carries the whole UI on weight and tracking alone,
+      so a second family would be pure payload. Matches the app, which uses
+      the same face through google_fonts.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+    />
+
+    <!-- Warm up the data plane before the bundle asks for it -->
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://blorbmart-tr1i.onrender.com" crossorigin />
+    <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+
+    <style>
+      /* Paint the brand ground immediately so the first frame is never
+         white-on-white while the bundle parses. */
+      html {
+        background: #f6f8fc;
+      }
+      /* The splash is brand blue, and on iOS the translucent status bar sits
+         over whatever the body paints — so a standalone launch starts blue
+         rather than flashing grey. */
+      @media (display-mode: standalone) {
+        html {
+          background: #1f77f1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <div style="padding: 24px; font-family: system-ui, sans-serif; text-align: center">
+        <h1 style="font-size: 20px">Blorbmart needs JavaScript</h1>
+        <p style="color: #39455a">Please enable JavaScript to order.</p>
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
