@@ -102,8 +102,22 @@ VITE_API_BASE_URL=https://blorbmart-tr1i.onrender.com
 
 ## Deploying
 
-`vercel.json` sets the SPA rewrite, the cache headers, and
-`Service-Worker-Allowed: /`.
+`vercel.json` sets the SPA rewrite and the cache headers. It carries no
+comments because Vercel validates the file against a strict schema and
+rejects any property it does not recognise — including a `comment` key — so
+the reasoning lives here instead:
+
+- **`/sw.js`** — `max-age=0, must-revalidate`, or a shipped fix sits behind a
+  cached worker until the browser decides otherwise. `Service-Worker-Allowed:
+  /` lets it control every route rather than just `/`.
+- **`/manifest.webmanifest`** — same revalidation, plus the correct
+  `application/manifest+json` type.
+- **`/assets/*`** — immutable for a year. Vite fingerprints these, so a
+  cached hit can never be the wrong version.
+- **`/icons/*`** — a week; they change only when `npm run icons` is re-run.
+- **Everything** — `nosniff`, `SAMEORIGIN`, a strict referrer policy, and a
+  permissions policy that allows geolocation (the address sheet uses it) and
+  refuses camera, microphone and payment outright.
 
 Two things must be done outside this repo, or the deployed app half-works:
 
