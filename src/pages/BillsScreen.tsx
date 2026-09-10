@@ -124,56 +124,6 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
           </div>
         )}
 
-        {/* ── Recent ─────────────────────────────────────────────────── */}
-        {recent.length > 0 && (
-          <>
-            <SectionHeader
-              title="Recent payments"
-              actionLabel="History"
-              onAction={() => navigate('/bills/history')}
-            />
-            <div style={{ paddingInline: 'var(--gap-page)' }}>
-              {recent.map((payment, i) => (
-                <FadeSlideIn key={payment.id} delay={staggerFor(i, 4)}>
-                  <PressScale
-                    scale={0.99}
-                    onClick={() => navigate(`/bills/receipt/${payment.id}`)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--gap-md)',
-                      width: '100%',
-                      padding: 'var(--gap-md) 0',
-                      borderBottom: '1px solid var(--color-line)',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span className="t-h4 clamp-1" style={{ display: 'block' }}>
-                        {billTitle(payment)}
-                      </span>
-                      <span className="t-caption clamp-1" style={{ display: 'block' }}>
-                        {payment.target} · {timeAgo(payment.createdAt)}
-                      </span>
-                    </span>
-                    <span style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <span className="t-price" style={{ display: 'block' }}>
-                        {money(payment.amount)}
-                      </span>
-                      <span
-                        className="t-caption-sm"
-                        style={{ color: BILL_STATUS_COLORS[payment.status] }}
-                      >
-                        {BILL_STATUS_LABELS[payment.status]}
-                      </span>
-                    </span>
-                  </PressScale>
-                </FadeSlideIn>
-              ))}
-            </div>
-          </>
-        )}
-
         {/* ── Categories ─────────────────────────────────────────────── */}
         {error ? (
           <EmptyState
@@ -236,6 +186,60 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
                 ))}
               </div>
             )}
+          </>
+        )}
+
+        {/* ── Recent ─────────────────────────────────────────────────────
+            Under the billers, never above them. Somebody opening Bills came
+            to pay one; what they paid last month is a reference, and a
+            reference that pushes the actual task below the fold is a
+            reference in the wrong place. Same order as bills_screen.dart. */}
+        {recent.length > 0 && (
+          <>
+            <SectionHeader
+              title="Recent payments"
+              actionLabel="History"
+              onAction={() => navigate('/bills/history')}
+            />
+            <div style={{ paddingInline: 'var(--gap-page)' }}>
+              {recent.map((payment, i) => (
+                <FadeSlideIn key={payment.id} delay={staggerFor(i, 4)}>
+                  <PressScale
+                    scale={0.99}
+                    onClick={() => navigate(`/bills/receipt/${payment.id}`)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--gap-md)',
+                      width: '100%',
+                      padding: 'var(--gap-md) 0',
+                      borderBottom: '1px solid var(--color-line)',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span className="t-h4 clamp-1" style={{ display: 'block' }}>
+                        {billTitle(payment)}
+                      </span>
+                      <span className="t-caption clamp-1" style={{ display: 'block' }}>
+                        {payment.target} · {timeAgo(payment.createdAt)}
+                      </span>
+                    </span>
+                    <span style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <span className="t-price" style={{ display: 'block' }}>
+                        {money(payment.amount)}
+                      </span>
+                      <span
+                        className="t-caption-sm"
+                        style={{ color: BILL_STATUS_COLORS[payment.status] }}
+                      >
+                        {BILL_STATUS_LABELS[payment.status]}
+                      </span>
+                    </span>
+                  </PressScale>
+                </FadeSlideIn>
+              ))}
+            </div>
           </>
         )}
       </ScreenBody>

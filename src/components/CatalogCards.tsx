@@ -54,7 +54,16 @@ export function VendorCard({ vendor, height = 158 }: { vendor: Vendor; height?: 
     <PressScale
       scale={0.985}
       onClick={() => navigate(`/r/${vendor.id}`)}
-      style={{ display: 'block', width: '100%', marginBottom: 'var(--gap-lg)' }}
+      // textAlign, because this renders a <button> and a button centres its
+      // text. Without it the vendor name and cuisine line float in the middle
+      // of the card while the meta row below them — a flex row, so immune —
+      // stays left. The rail cards already set it for the same reason.
+      style={{
+        display: 'block',
+        width: '100%',
+        marginBottom: 'var(--gap-lg)',
+        textAlign: 'left',
+      }}
     >
       <div style={{ position: 'relative' }}>
         <SmartImage

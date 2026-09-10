@@ -425,6 +425,13 @@ img {
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   padding-inline: var(--gap-page);
+  /* Without this the snapport is the padding box, so the browser snaps the
+     first card's left edge to x=0 and scrolls the page padding away — the
+     rail then starts hard against the screen edge while the search bar and
+     every section header stay at --gap-page. Insetting the snapport by the
+     same amount makes "snapped to the start" mean "aligned with everything
+     else", which is what the Flutter rails do. */
+  scroll-padding-inline: var(--gap-page);
   scrollbar-width: none;
 }
 .rail::-webkit-scrollbar { display: none; }
@@ -438,4 +445,157 @@ img {
   position: absolute; width: 1px; height: 1px;
   padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Paper receipt.
+
+   The in-app half of the receipt the backend renders and prints. Same
+   paper, same torn edge, same monospace, same dotted leaders — a customer
+   who screenshots this and a caterer who scans the printed copy should be
+   looking at the same document.
+
+   Deliberately outside the app's own palette: the rest of Blorbmart is
+   white cards on a cool canvas, and a receipt that adopted that would read
+   as one more card. It is meant to read as paper.
+   ═══════════════════════════════════════════════════════════════════════ */
+.rcpt {
+  --paper: #FFFDF6;
+  --paper-ink: #161311;
+  --paper-soft: #6B635C;
+  --paper-faint: #A9A099;
+  --paper-rule: #D9D1C6;
+  --tear: 9px;
+
+  position: relative;
+  background: var(--paper);
+  color: var(--paper-ink);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 26px 20px 26px;
+  /* Zigzag top and bottom, solid in between. */
+  --tooth:
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg)
+      bottom / 18px var(--tear) repeat-x,
+    conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg)
+      top / 18px var(--tear) repeat-x,
+    linear-gradient(#000 0 0) center / 100% calc(100% - (2 * var(--tear))) no-repeat;
+  -webkit-mask: var(--tooth);
+  mask: var(--tooth);
+}
+
+/* The shadow lives on a wrapper: a filter traces the torn edge, a
+   box-shadow would trace the rectangle the mask cut away. */
+.rcpt-sheet { filter: drop-shadow(0 1px 2px rgba(22, 19, 17, 0.10)) drop-shadow(0 10px 24px rgba(22, 19, 17, 0.13)); }
+
+/* Paper fibre — stock, not texture. */
+.rcpt::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+.rcpt-body { position: relative; z-index: 1; }
+
+.rcpt-head { text-align: center; }
+.rcpt-mark { height: 26px; width: auto; display: block; margin: 0 auto; max-width: 78%; }
+.rcpt-tagline {
+  font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--paper-soft); margin-top: 5px;
+}
+.rcpt-doctype {
+  margin-top: 10px; font-size: 10px; font-weight: 500;
+  letter-spacing: 0.2em; text-transform: uppercase;
+}
+
+.rcpt-rule { border-top: 1px dashed var(--paper-rule); margin: 13px 0; }
+.rcpt-rule.solid { border-top-style: solid; }
+.rcpt-rule.double { border-top: 3px double var(--paper-ink); margin: 10px 0 9px; }
+
+.rcpt-cap {
+  font-size: 9px; font-weight: 500; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--paper-soft); margin-bottom: 8px;
+}
+
+/* label ......... value */
+.rcpt-ln { display: flex; align-items: baseline; gap: 6px; padding: 2.5px 0; }
+.rcpt-k { color: var(--paper-soft); white-space: nowrap; }
+.rcpt-dots {
+  flex: 1 1 auto; min-width: 12px;
+  border-bottom: 1px dotted var(--paper-rule);
+  transform: translateY(-3px);
+}
+.rcpt-v { text-align: right; font-weight: 500; max-width: 58%; word-break: break-word; }
+.rcpt-ln.strong { padding-top: 4px; }
+.rcpt-ln.strong .rcpt-k {
+  color: var(--paper-ink); font-size: 12.5px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.rcpt-ln.strong .rcpt-v { font-size: 15.5px; }
+.rcpt-ln.strong .rcpt-dots { border-bottom-color: transparent; }
+
+.rcpt-title {
+  font-family: var(--font-sans); font-size: 15px; font-weight: 700;
+  text-align: center; line-height: 1.35; color: var(--paper-ink);
+}
+.rcpt-sub { text-align: center; font-size: 10.5px; color: var(--paper-soft); margin-top: 3px; }
+.rcpt-amount-cap {
+  text-align: center; font-size: 9px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--paper-soft);
+}
+.rcpt-amount {
+  text-align: center; font-size: 29px; font-weight: 500;
+  letter-spacing: -0.5px; line-height: 1.15; margin-top: 2px;
+}
+
+.rcpt-stamp {
+  display: inline-block; border: 2.5px solid currentColor; border-radius: 5px;
+  padding: 5px 15px 4px; font-size: 15px; font-weight: 500;
+  letter-spacing: 0.22em; text-indent: 0.22em; text-transform: uppercase;
+  transform: rotate(-7deg); opacity: 0.84; position: relative;
+}
+.rcpt-stamp::before {
+  content: ''; position: absolute; inset: -3px;
+  border: 1px solid currentColor; border-radius: 7px; opacity: 0.45;
+}
+.rcpt-stamp-wrap { display: flex; justify-content: center; margin: 13px 0 2px; }
+.rcpt-stamp-note { text-align: center; font-size: 10px; color: var(--paper-soft); margin-top: 8px; }
+
+.rcpt-item { padding: 5px 0; }
+.rcpt-item + .rcpt-item { border-top: 1px dotted #E8E1D6; }
+.rcpt-item-name { font-weight: 500; }
+.rcpt-item .rcpt-ln { padding: 1px 0; }
+
+.rcpt-secret { border: 1.5px dashed var(--paper-ink); padding: 12px 14px; text-align: center; }
+.rcpt-secret-v {
+  font-size: 20px; font-weight: 500; letter-spacing: 0.1em;
+  margin: 7px 0 5px; line-height: 1.4;
+  word-break: normal; overflow-wrap: break-word;
+}
+.rcpt-secret-hint { font-size: 10px; color: var(--paper-soft); line-height: 1.5; }
+
+/* The tear-off stub. The notches are punched in the page behind, so they
+   take the canvas colour rather than a colour of their own. */
+.rcpt-perf {
+  position: relative; height: 0;
+  border-top: 1.5px dashed var(--paper-rule); margin: 20px 0;
+}
+.rcpt-perf::before, .rcpt-perf::after {
+  content: ''; position: absolute; top: -8px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--color-canvas);
+}
+.rcpt-perf::before { left: -28px; }
+.rcpt-perf::after { right: -28px; }
+
+.rcpt-qr { width: 124px; height: 124px; display: block; margin: 9px auto 8px; image-rendering: pixelated; }
+.rcpt-code { text-align: center; font-size: 14px; font-weight: 500; letter-spacing: 0.28em; text-indent: 0.28em; }
+.rcpt-fine { text-align: center; font-size: 9.5px; color: var(--paper-faint); line-height: 1.65; }
+.rcpt-thanks {
+  text-align: center; font-size: 11px; font-weight: 500;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.rcpt-note {
+  border-left: 3px solid #A86A12; background: rgba(168, 106, 18, 0.07);
+  padding: 9px 11px; font-size: 10.5px; color: #7A4F10; line-height: 1.5;
 }
