@@ -59,11 +59,21 @@ export function InstallBanner() {
         className="blorb-fade-slide-in"
         style={{
           position: 'fixed',
-          left: '50%',
-          transform: 'translateX(-50%)',
+          // Centred with left/right/auto margins rather than a translate.
+          // The entrance animation animates `transform`, and an animation
+          // beats an inline style for the whole of its run — and, because it
+          // is filled `both`, for good afterwards. A `translateX(-50%)` here
+          // was therefore wiped out the moment the banner appeared, leaving
+          // it pinned at `left: 50%` with its full width running off the
+          // right edge: on a phone the Install button and the dismiss button
+          // both sat past the end of the screen with no way to scroll to
+          // them. Nothing here touches `transform`, so the slide is free to.
+          left: 'var(--gap-md)',
+          right: 'var(--gap-md)',
+          marginInline: 'auto',
           bottom: 'calc(var(--size-nav-bar) + var(--safe-bottom) + var(--gap-md))',
           zIndex: 40,
-          width: 'min(calc(100% - 24px), 496px)',
+          maxWidth: 496,
           display: 'flex',
           alignItems: 'center',
           gap: 'var(--gap-md)',
@@ -95,6 +105,9 @@ export function InstallBanner() {
           label="Install"
           size="sm"
           expand={false}
+          // The whole point of the banner. It gives up its padding before it
+          // gives up a character, and it never gives up either to the text.
+          style={{ flexShrink: 0 }}
           icon={<Download size={15} aria-hidden />}
           onClick={() => {
             if (needsIosInstructions) setIosOpen(true)
