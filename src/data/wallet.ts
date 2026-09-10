@@ -146,6 +146,9 @@ export async function startTopUp(amount: number) {
     body: {
       userId: user.uid,
       amount,
+      // Come back to the wallet rather than to the API's own callback page.
+      // See the note on startPaystack in data/orders.ts.
+      returnPath: '/wallet',
       ...(user.email ? { email: user.email } : {}),
     },
   })

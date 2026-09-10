@@ -2,7 +2,7 @@
    Home furniture — a port of lib/features/home/home_widgets.dart.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, query, where, limit as fbLimit } from 'firebase/firestore'
 import {
@@ -45,10 +45,46 @@ import { StageIcon } from './StageIcon'
  * The home header.
  *
  * A brand-blue field that carries the address, the greeting and the search
- * bar. As the page scrolls, the greeting fades out and the header collapses
- * onto a pinned search bar, so search is reachable from anywhere in the feed
+ * bar. As the page scrolls, the address and greeting slide away and the header
+ * pins onto the search bar, so search is reachable from anywhere in the feed
  * without a second control.
+ *
+ * ── Why it is two boxes ───────────────────────────────────────────────────
+ *
+ * The obvious implementation — one sticky box whose height shrinks with
+ * scrollY — shakes, measurably. A sticky element still occupies its natural
+ * height in the document, so shrinking it reflows everything below it: the
+ * page got 120px shorter as you scrolled into it, `scrollTo(0, 10)` landed at
+ * 0 and `scrollTo(0, 110)` at 105 because the browser cannot honour a
+ * position in a document moving under it, and the feed travelled at 2.09x the
+ * scroll speed through the collapse before snapping back to 1x. Scroll,
+ * reflow, scroll.
+ *
+ * Flutter does not have this problem because SliverPersistentHeader collapses
+ * in sliver space, where the shrinking extent is part of the scroll
+ * arithmetic. The browser has no equivalent. What it does have is this: two
+ * boxes of fixed height, so the document never reflows at all.
+ *
+ *   * SCROLL-AWAY carries the safe area, the address and the greeting, and is
+ *     in normal flow. It simply leaves.
+ *   * PINNED carries the safe area again and the search bar, and is sticky at
+ *     top: 0. It comes to rest under the notch as the first box goes.
+ *
+ * Both are brand blue, so the seam is invisible and it reads as one header
+ * collapsing. The feed moves at exactly 1x the whole way, and no JavaScript
+ * touches layout, so nothing can lag a frame behind the finger.
+ *
+ * Splitting it this way is also what fixed the second defect: the old header
+ * shrank the address row and the greeting at different rates (64*(1-t) against
+ * 52*(1-1.2t)) inside OverflowBoxes that did not clip, so on the way out the
+ * greeting slid up through the address line. They travel together now.
  */
+
+/** Address row + greeting. The part that leaves. */
+const HEADER_SCROLL_AWAY = 116
+/** Search bar plus the breathing room under it. The part that stays. */
+const HEADER_PINNED = 70
+
 export function HomeHeader({
   onSearch,
   onAddress,
@@ -58,135 +94,167 @@ export function HomeHeader({
   onAddress: () => void
   onNotifications: () => void
 }) {
-  const [t, setT] = useState(0)
   const session = useSessionStore()
 
+  // Only the search hint needs React, and only once, as it crosses the
+  // threshold. The fade and the corner radius are written straight to style
+  // in a rAF: a re-render per scroll frame is a frame of latency between the
+  // finger and the paint, and neither property affects layout.
+  const [collapsed, setCollapsed] = useState(false)
+  const fadeRef = useRef<HTMLDivElement>(null)
+  const pinnedRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
-    const onScroll = () => {
-      // 120px of travel between fully expanded and fully collapsed, matching
-      // the Flutter delegate's shrink range.
-      setT(Math.min(Math.max(window.scrollY, 0) / 120, 1))
+    let frame = 0
+    const apply = () => {
+      frame = 0
+      const t = Math.min(Math.max(window.scrollY, 0) / HEADER_SCROLL_AWAY, 1)
+      // The block leaves on its own; the fade only stops it grazing the
+      // status bar on the way past.
+      if (fadeRef.current) fadeRef.current.style.opacity = String(1 - t * 1.35)
+      // Square off against the feed once it is pinned, the way the Flutter
+      // delegate does.
+      if (pinnedRef.current) {
+        pinnedRef.current.style.borderRadius = `0 0 ${28 * (1 - t)}px ${28 * (1 - t)}px`
+      }
+      setCollapsed(t > 0.6)
     }
-    onScroll()
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(apply)
+    }
+    apply()
     window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (frame) cancelAnimationFrame(frame)
+    }
   }, [])
 
-  const fade = (multiplier: number) => Math.max(0, Math.min(1, 1 - t * multiplier))
-
   return (
-    <div
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 25,
-        background: 'var(--gradient-brand)',
-        borderRadius: `0 0 ${28 * (1 - t)}px ${28 * (1 - t)}px`,
-        paddingTop: 'var(--safe-top)',
-        overflow: 'hidden',
-      }}
-    >
-      {/* A faint radial highlight keeps the large flat blue from reading as a
-          solid slab. */}
+    <>
+      {/* ── The part that leaves ─────────────────────────────────────── */}
       <div
-        aria-hidden
+        ref={fadeRef}
         style={{
-          position: 'absolute',
-          top: -80,
-          right: -60,
-          width: 240,
-          height: 240,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 70%)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      {/* ── Top row: address + bell ─────────────────────────────────── */}
-      <div
-        style={{
-          height: Math.max(0, 64 * (1 - t)),
-          opacity: fade(1.6),
+          position: 'relative',
+          zIndex: 24,
+          // Fixed. The moment this depends on scroll, the page reflows under
+          // the scroll and the header shakes.
+          height: `calc(var(--safe-top) + ${HEADER_SCROLL_AWAY}px)`,
+          paddingTop: 'var(--safe-top)',
+          background: 'var(--gradient-brand)',
           overflow: 'hidden',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--gap-sm)',
-          padding: '0 var(--gap-md) 0 var(--gap-page)',
         }}
       >
-        <PressScale
-          scale={0.97}
-          onClick={onAddress}
+        {/* A faint radial highlight keeps the large flat blue from reading as
+            a solid slab. */}
+        <div
+          aria-hidden
           style={{
+            position: 'absolute',
+            top: -80,
+            right: -60,
+            width: 240,
+            height: 240,
+            borderRadius: '50%',
+            background:
+              'radial-gradient(circle, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 70%)',
+            pointerEvents: 'none',
+          }}
+        />
+
+        {/* Top row: address + bell */}
+        <div
+          style={{
+            position: 'relative',
+            height: 64,
             display: 'flex',
             alignItems: 'center',
             gap: 'var(--gap-sm)',
-            flex: 1,
-            minWidth: 0,
-            textAlign: 'left',
+            padding: '0 var(--gap-md) 0 var(--gap-page)',
           }}
         >
-          <span
+          <PressScale
+            scale={0.97}
+            onClick={onAddress}
             style={{
-              display: 'grid',
-              placeItems: 'center',
-              width: 30,
-              height: 30,
-              flexShrink: 0,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.2)',
-              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--gap-sm)',
+              flex: 1,
+              minWidth: 0,
+              textAlign: 'left',
             }}
           >
-            <MapPin size={17} aria-hidden />
-          </span>
-          <span style={{ minWidth: 0 }}>
             <span
               style={{
-                display: 'block',
-                fontSize: 9.5,
-                fontWeight: 600,
-                letterSpacing: '0.7px',
-                color: 'rgba(255,255,255,0.72)',
+                display: 'grid',
+                placeItems: 'center',
+                width: 30,
+                height: 30,
+                flexShrink: 0,
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.2)',
+                color: '#fff',
               }}
             >
-              DELIVER TO
+              <MapPin size={17} aria-hidden />
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-              <span className="t-label clamp-1" style={{ color: '#fff' }}>
-                {addressLabel(session.address)}
+            <span style={{ minWidth: 0 }}>
+              <span
+                style={{
+                  display: 'block',
+                  fontSize: 9.5,
+                  fontWeight: 600,
+                  letterSpacing: '0.7px',
+                  color: 'rgba(255,255,255,0.72)',
+                }}
+              >
+                DELIVER TO
               </span>
-              <ChevronDown size={18} aria-hidden style={{ color: '#fff', flexShrink: 0 }} />
+              <span style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                <span className="t-label clamp-1" style={{ color: '#fff' }}>
+                  {addressLabel(session.address)}
+                </span>
+                <ChevronDown size={18} aria-hidden style={{ color: '#fff', flexShrink: 0 }} />
+              </span>
             </span>
-          </span>
-        </PressScale>
+          </PressScale>
 
-        <NotificationBell onClick={onNotifications} />
+          <NotificationBell onClick={onNotifications} />
+        </div>
+
+        {/* Greeting */}
+        <div style={{ position: 'relative', height: 52, padding: '0 var(--gap-page)' }}>
+          <div className="t-h1" style={{ color: '#fff' }}>
+            {isSignedIn(session) ? `${greeting()}, ${firstName(session)}` : greeting()}
+          </div>
+          <div className="t-body-sm" style={{ marginTop: 2, color: 'rgba(255,255,255,0.82)' }}>
+            What are you eating today?
+          </div>
+        </div>
       </div>
 
-      {/* ── Greeting ─────────────────────────────────────────────────── */}
+      {/* ── The part that stays ──────────────────────────────────────── */}
+      {/* Carries the safe area itself, so once it pins the search bar is
+          clear of the notch rather than under it. */}
       <div
+        ref={pinnedRef}
         style={{
-          height: Math.max(0, 52 * (1 - t * 1.2)),
-          opacity: fade(2.2),
-          overflow: 'hidden',
-          padding: '0 var(--gap-page)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 25,
+          height: `calc(var(--safe-top) + ${HEADER_PINNED}px)`,
+          paddingTop: 'var(--safe-top)',
+          background: 'var(--gradient-brand)',
+          borderRadius: '0 0 28px 28px',
         }}
       >
-        <div className="t-h1" style={{ color: '#fff' }}>
-          {isSignedIn(session) ? `${greeting()}, ${firstName(session)}` : greeting()}
-        </div>
-        <div className="t-body-sm" style={{ marginTop: 2, color: 'rgba(255,255,255,0.82)' }}>
-          What are you eating today?
+        <div style={{ padding: '0 var(--gap-page)' }}>
+          <SearchBar onClick={onSearch} collapsed={collapsed} />
         </div>
       </div>
-
-      {/* ── Search, pinned ───────────────────────────────────────────── */}
-      <div style={{ padding: `0 var(--gap-page) ${16 - 4 * t}px` }}>
-        <SearchBar onClick={onSearch} collapsed={t > 0.6} />
-      </div>
-    </div>
+    </>
   )
 }
 

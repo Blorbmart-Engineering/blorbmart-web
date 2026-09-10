@@ -21,6 +21,7 @@ export function AppBar({
   trailing,
   transparent = false,
   onImage = false,
+  showBack = true,
 }: {
   title?: string
   subtitle?: string
@@ -29,6 +30,12 @@ export function AppBar({
   trailing?: ReactNode
   transparent?: boolean
   onImage?: boolean
+  /**
+   * Tab screens have no back arrow, because there is nothing behind them —
+   * the bottom nav is how you leave. Matches a Flutter AppBar on a tab, which
+   * only grows a leading button when the route was pushed.
+   */
+  showBack?: boolean
 }) {
   const navigate = useNavigate()
   return (
@@ -45,13 +52,15 @@ export function AppBar({
         borderBottom: transparent ? 'none' : '1px solid var(--color-line)',
       }}
     >
-      <IconButton
-        label="Go back"
-        onImage={onImage}
-        onClick={onBack ?? (() => navigate(-1))}
-      >
-        <ArrowLeft size={20} aria-hidden />
-      </IconButton>
+      {showBack && (
+        <IconButton
+          label="Go back"
+          onImage={onImage}
+          onClick={onBack ?? (() => navigate(-1))}
+        >
+          <ArrowLeft size={20} aria-hidden />
+        </IconButton>
+      )}
       {title && (
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 className="t-h3 clamp-1" style={{ margin: 0 }}>

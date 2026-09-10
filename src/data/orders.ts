@@ -143,9 +143,24 @@ export function calculatePricing(orderId: string, promoCode?: string) {
   })
 }
 
+/**
+ * `returnPath` is where Paystack should drop the customer once they have paid.
+ *
+ * Without it the backend fell back to PAYSTACK_CALLBACK_URL, a page on the API
+ * itself — so a browser paid, landed on the API's "Payment Received" screen,
+ * and never came back into the app. PaymentReturn never ran, the order was
+ * never settled client-side, and /order-placed was never reached.
+ *
+ * A path, not a URL: the server joins it to the request's own Origin, so this
+ * cannot be used to redirect somebody off-site.
+ */
 export function startPaystack(orderId: string, promoCode?: string) {
   return Api.post('/api/orders/checkout/paystack', {
-    body: { orderId, ...(promoCode ? { promoCode } : {}) },
+    body: {
+      orderId,
+      returnPath: `/order-placed/${orderId}`,
+      ...(promoCode ? { promoCode } : {}),
+    },
   })
 }
 
