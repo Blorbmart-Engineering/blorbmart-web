@@ -84,6 +84,13 @@
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, sans-serif;
 
+  /* Ticket furniture: serials, ADMIT ONE, the labels above a data field.
+     Deliberately the system stack rather than a second webfont — this is a
+     handful of words on one screen, and the ticket has to render at a venue
+     door with no signal, where a font that has not arrived is a blank line. */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
   /* ── Motion. One vocabulary for the whole app. ─────────────────────── */
   --ease-emphasized:     cubic-bezier(0.2, 0, 0, 1);
   --ease-emphasized-in:  cubic-bezier(0.3, 0, 0.8, 0.15);
@@ -297,6 +304,15 @@ img {
   font-size: 11px; font-weight: 800; line-height: 1.2;
   letter-spacing: 0.8px; text-transform: uppercase;
   color: var(--color-ink-muted);
+}
+
+/* Ticket furniture. Mono, wide-tracked, upper — the register printed
+   tickets use for everything that is not the event's name. */
+.t-mono-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px; font-weight: 500; line-height: 1.2;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--color-ink-faint);
 }
 
 /* Money — tabular so columns of prices line up. */

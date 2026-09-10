@@ -193,6 +193,45 @@ export function dayAndTime(when: Date | null | undefined): string {
   return when ? dayTime.format(when) : ''
 }
 
+/* ── Ticket furniture ─────────────────────────────────────────────────────
+   A ticket splits a date across separate fields — a weekday line, a clock
+   time, a torn-off date block — so each part is formatted on its own rather
+   than sliced back out of dayAndTime's combined string.
+   ───────────────────────────────────────────────────────────────────────── */
+
+const weekdayDate = new Intl.DateTimeFormat('en-NG', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+})
+const clock = new Intl.DateTimeFormat('en-NG', {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+})
+const dayNum = new Intl.DateTimeFormat('en-NG', { day: '2-digit' })
+const monthAbbr = new Intl.DateTimeFormat('en-NG', { month: 'short' })
+
+/** "Fri 18 Sep" — the date line on a ticket. */
+export function weekdayAndDate(when: Date | null | undefined): string {
+  return when ? weekdayDate.format(when) : ''
+}
+
+/** "10:22 AM" — doors, or the moment a ticket was scanned. */
+export function clockTime(when: Date | null | undefined): string {
+  return when ? clock.format(when) : ''
+}
+
+/** "18" — the day, for the date block on a ticket row. */
+export function dayOfMonth(when: Date | null | undefined): string {
+  return when ? dayNum.format(when) : '--'
+}
+
+/** "Sep" — the month, for the date block on a ticket row. */
+export function monthShort(when: Date | null | undefined): string {
+  return when ? monthAbbr.format(when) : ''
+}
+
 /* ── Phone ────────────────────────────────────────────────────────────── */
 
 /** Masks a phone number for display on receipts: 0704 *** 9911. */
