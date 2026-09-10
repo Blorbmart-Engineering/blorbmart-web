@@ -42,6 +42,10 @@ export default function CheckoutScreen() {
   const [deliveryFee, setDeliveryFee] = useState(0)
   const [serviceFee, setServiceFee] = useState(0)
   const [discount, setDiscount] = useState(0)
+  // A free-delivery promo. Separate from `discount` because the fee itself
+  // is unchanged — the rider is still paid it — and only what the customer
+  // is charged comes down. See orderPricingService.applyDeliveryWaiver.
+  const [deliveryDiscount, setDeliveryDiscount] = useState(0)
   const [total, setTotal] = useState(cartSubtotal(lines))
 
   const [walletBalance, setWalletBalance] = useState(0)
@@ -84,21 +88,27 @@ export default function CheckoutScreen() {
         const nextDelivery = asDouble(data.deliveryFee)
         const nextService = asDouble(data.serviceFee)
         const nextDiscount = asDouble(data.discountAmount ?? data.discount)
+        const nextDeliveryDiscount = asDouble(data.deliveryDiscount)
 
         setSubtotal(nextSubtotal)
         setDeliveryFee(nextDelivery)
         setServiceFee(nextService)
         setDiscount(nextDiscount)
+        setDeliveryDiscount(nextDeliveryDiscount)
         setTotal(
           asDouble(
             data.totalAmount ?? data.total,
-            nextSubtotal - nextDiscount + nextDelivery + nextService,
+            nextSubtotal - nextDiscount + nextDelivery + nextService - nextDeliveryDiscount,
           ),
         )
 
         if (code) {
-          setPromoApplied(nextDiscount > 0 ? code.toUpperCase() : null)
-          if (nextDiscount <= 0) setPromoError('That code did not apply.')
+          // A free-delivery code is applied even though it takes nothing off
+          // the goods, so "did it work" cannot be "is the discount above
+          // zero" any more.
+          const worked = nextDiscount > 0 || nextDeliveryDiscount > 0
+          setPromoApplied(worked ? code.toUpperCase() : null)
+          if (!worked) setPromoError('That code did not apply.')
         }
       } catch (e) {
         if (code) setPromoError(apiErrorMessage(e, 'We could not apply that code.'))
@@ -312,7 +322,12 @@ export default function CheckoutScreen() {
           >
             <Tag size={18} aria-hidden style={{ color: 'var(--color-success)' }} />
             <span className="t-label" style={{ flex: 1, color: 'var(--color-success)' }}>
-              {promoApplied} · you saved {money(discount)}
+              {promoApplied} ·{' '}
+              {discount > 0 && deliveryDiscount > 0
+                ? `you saved ${money(discount + deliveryDiscount)}`
+                : deliveryDiscount > 0
+                  ? 'delivery is on us'
+                  : `you saved ${money(discount)}`}
             </span>
             <button
               type="button"
@@ -395,6 +410,13 @@ export default function CheckoutScreen() {
             <SummaryRow
               label="Discount"
               value={`−${money(discount)}`}
+              valueColor="var(--color-success)"
+            />
+          )}
+          {deliveryDiscount > 0 && (
+            <SummaryRow
+              label="Delivery waived"
+              value={`−${money(deliveryDiscount)}`}
               valueColor="var(--color-success)"
             />
           )}
