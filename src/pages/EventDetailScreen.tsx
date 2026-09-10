@@ -14,6 +14,7 @@ import {
   eventHasEnded,
   eventWhereLabel,
   orderCeiling,
+  ticketLimitNote,
   salesClosed,
   ticketPriceLabel,
   type BlorbEvent,
@@ -197,6 +198,13 @@ export default function EventDetailScreen() {
                             style={{ display: 'block', color: 'var(--color-appetite)', marginTop: 2 }}
                           >
                             Only {tier.remaining} left
+                          </span>
+                        )}
+                        {/* Said before a quantity is picked. A cap discovered
+                            at checkout reads as a bug, not a rule. */}
+                        {ticketLimitNote(tier) && (
+                          <span className="t-caption-sm" style={{ display: 'block', marginTop: 2 }}>
+                            {ticketLimitNote(tier)}
                           </span>
                         )}
                       </span>

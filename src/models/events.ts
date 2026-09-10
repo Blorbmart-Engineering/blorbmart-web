@@ -25,6 +25,15 @@ export interface TicketType {
   remaining: number | null
   soldOut: boolean
   maxPerOrder: number
+  /**
+   * How many one account may hold in total, across every order. 0 = no cap.
+   *
+   * Distinct from maxPerOrder, which limits a single basket and so caps
+   * nothing on its own — two per order is ten tickets in five goes. The
+   * backend is the enforcement; this is here so the stepper and the copy
+   * agree with it instead of letting someone reach checkout and be refused.
+   */
+  maxPerAccount: number
   salesEndAt: Date | null
 }
 
@@ -39,6 +48,7 @@ export function ticketTypeFromMap(m: Record<string, unknown>): TicketType {
     remaining: m.remaining == null ? null : asInt(m.remaining),
     soldOut: asBool(m.soldOut),
     maxPerOrder: asInt(m.maxPerOrder),
+    maxPerAccount: asInt(m.maxPerAccount),
     salesEndAt: asDate(m.salesEndAt),
   }
 }
@@ -61,8 +71,33 @@ export function ticketAvailable(t: TicketType): boolean {
 export function orderCeiling(t: TicketType): number {
   const caps: number[] = [10]
   if (t.maxPerOrder > 0) caps.push(t.maxPerOrder)
+  // The per-account cap is the most anyone can end up holding, so it is also
+  // the most worth offering in one go. It is an upper bound only — how many
+  // this person already holds is the backend's to know, and it will refuse
+  // the difference.
+  if (t.maxPerAccount > 0) caps.push(t.maxPerAccount)
   if (t.remaining != null) caps.push(t.remaining)
   return Math.min(...caps)
+}
+
+/**
+ * The limit, said out loud, or empty when there is not one worth saying.
+ *
+ * Shown before someone picks a quantity rather than after they are refused
+ * one: a cap discovered at checkout reads as a bug.
+ */
+export function ticketLimitNote(t: TicketType): string {
+  if (t.maxPerAccount > 0) {
+    return t.maxPerAccount === 1
+      ? 'One per person'
+      : `Limit ${t.maxPerAccount} per person`
+  }
+  if (t.maxPerOrder > 0) {
+    return t.maxPerOrder === 1
+      ? 'One at a time'
+      : `Up to ${t.maxPerOrder} at a time`
+  }
+  return ''
 }
 
 export function ticketPriceLabel(t: TicketType): string {
