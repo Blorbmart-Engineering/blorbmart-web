@@ -92,18 +92,17 @@ export function clearUniversityCache(): void {
  * Whether a store or product tagged `itemCampusId` should be shown to a buyer
  * on `buyerCampusId`.
  *
- * Untagged content passes, deliberately. The catalogue predates campus
- * tagging, so a strict match would empty the app the day this shipped and keep
- * it empty until every vendor had been chased into tagging their store. A tag
- * can therefore only ever narrow reach, never grant it, so there is no path
- * here that leaks one campus's menu onto another.
+ * Strict: a buyer on a campus sees only that campus's items. Untagged content
+ * used to pass while the catalogue predated campus tagging. Every store and
+ * product now carries a campus and the rules refuse a product without one, so
+ * anything still untagged is a mistake rather than a legacy item, and letting
+ * it through would put one campus's menu on every other. A buyer with no
+ * campus yet still sees everything.
  */
 export function visibleOnCampus(
   itemCampusId: unknown,
   buyerCampusId: string | null,
 ): boolean {
-  const tag = asString(itemCampusId)
-  if (!tag) return true
   if (!buyerCampusId) return true
-  return tag === buyerCampusId
+  return asString(itemCampusId) === buyerCampusId
 }
