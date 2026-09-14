@@ -171,11 +171,12 @@ export default function App() {
             <Route path="/r/:id" element={<Shell><VendorScreen /></Shell>} />
 
             {/* ── Ordering ───────────────────────────────── */}
-            <Route path="/cart" element={<Shell><CartScreen /></Shell>} />
-            <Route
-              path="/checkout"
-              element={<Protected><Shell><CheckoutScreen /></Shell></Protected>}
-            />
+            {/* Pushed screens, the way the phone app pushes them: no tab bar
+                and no basket bar. Inside the shell, that fixed bar sat on top
+                of their sticky Checkout and Pay buttons, so a tap on "Pay"
+                landed on "View basket" and went straight back to /cart. */}
+            <Route path="/cart" element={<CartScreen />} />
+            <Route path="/checkout" element={<Protected><CheckoutScreen /></Protected>} />
             <Route
               path="/order-placed/:orderId"
               element={<Protected><Shell><OrderPlaced /></Shell></Protected>}

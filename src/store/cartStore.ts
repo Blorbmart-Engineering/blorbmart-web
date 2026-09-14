@@ -255,6 +255,33 @@ export const useCartStore = create<CartState>((set, get) => {
   }
 })
 
+/**
+ * Another tab changed the basket. Without this, a checkout left open in one
+ * tab kept charging for a line already removed in another. That tab has
+ * written storage and scheduled the remote sync, so this one only adopts the
+ * lines, and drops its own pending sync so it cannot put the old basket back.
+ */
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== scopedKey()) return
+    try {
+      const decoded: unknown = e.newValue ? JSON.parse(e.newValue) : []
+      if (!Array.isArray(decoded)) return
+      if (syncTimer) {
+        clearTimeout(syncTimer)
+        syncTimer = null
+      }
+      useCartStore.setState({
+        lines: decoded
+          .filter((m): m is Record<string, unknown> => !!m && typeof m === 'object')
+          .map(cartLineFromMap),
+      })
+    } catch (err) {
+      console.warn('[cart] cross-tab update ignored', err)
+    }
+  })
+}
+
 /* ── Derived reads. Selectors rather than stored fields, so nothing can
       drift out of step with `lines`. ──────────────────────────────────── */
 

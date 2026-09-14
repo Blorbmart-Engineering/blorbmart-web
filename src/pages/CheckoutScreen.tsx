@@ -64,9 +64,14 @@ export default function CheckoutScreen() {
 
   const paidRef = useRef(false)
   const orderIdRef = useRef<string | null>(null)
-  const createdRef = useRef(false)
+  // The basket the current draft was written from. A draft describes one
+  // basket; when the basket changes, the draft is replaced rather than paid.
+  const draftBasketRef = useRef<string | null>(null)
+  const draftSeqRef = useRef(0)
 
   const address = session.address
+  const profile = session.profile
+  const basketKey = JSON.stringify(lines)
 
   /**
    * The backend sleeps, and its first request costs about twenty seconds.
@@ -84,6 +89,9 @@ export default function CheckoutScreen() {
       setPromoError(null)
       try {
         const data = await calculatePricing(id, code ?? undefined)
+        // The basket may have changed while the server answered, replacing
+        // this draft; its figures would price a basket that no longer exists.
+        if (orderIdRef.current !== id) return
         const nextSubtotal = asDouble(data.subtotal, subtotal)
         const nextDelivery = asDouble(data.deliveryFee)
         const nextService = asDouble(data.serviceFee)
@@ -111,41 +119,76 @@ export default function CheckoutScreen() {
           if (!worked) setPromoError('That code did not apply.')
         }
       } catch (e) {
+        if (orderIdRef.current !== id) return
         if (code) setPromoError(apiErrorMessage(e, 'We could not apply that code.'))
         else setError(apiErrorMessage(e, 'We could not price this order. Try again.'))
       } finally {
-        setPricing(false)
+        if (orderIdRef.current === id) setPricing(false)
       }
     },
     [subtotal],
   )
 
-  // Create the draft once, then price it.
+  // Write a draft for the basket as it stands, and a new one whenever the
+  // basket changes — a line removed in the basket or in another tab — so the
+  // total here is always the total of what is actually in it. This used to
+  // run once, and a basket edited afterwards kept its old price.
   useEffect(() => {
-    if (createdRef.current) return
-    if (!lines.length || !address) return
-    createdRef.current = true
+    if (paidRef.current || paying || !address) return
+    if (draftBasketRef.current === basketKey) return
+
+    // Said up front, instead of letting Firestore refuse the write with
+    // "Missing or insufficient permissions".
+    const blocker = orderBlocker(profile)
+    if (lines.length && blocker) {
+      setError(blocker)
+      setPricing(false)
+      return
+    }
+
+    const stale = orderIdRef.current
+    if (stale) {
+      orderIdRef.current = null
+      setOrderId(null)
+      void abandonDraft(stale)
+    }
+    draftBasketRef.current = basketKey
+    if (!lines.length) return
+
+    const seq = ++draftSeqRef.current
+    // The basket's own figure at once; the server's replaces it when priced.
+    const basketTotal = cartSubtotal(lines)
+    setSubtotal(basketTotal)
+    setTotal(basketTotal)
+    setPricing(true)
+    setError(null)
 
     const run = async () => {
       try {
         const id = await createOrder({
           lines,
           address: addressToFirestore(address),
-          subtotal: cartSubtotal(lines),
+          subtotal: basketTotal,
           deliveryFee: 0,
           serviceFee: 0,
           vertical: cartVertical(lines),
         })
+        if (seq !== draftSeqRef.current || paidRef.current) {
+          // Overtaken by a newer basket while this one was being written.
+          void abandonDraft(id)
+          return
+        }
         setOrderId(id)
         orderIdRef.current = id
-        await refreshPricing(id, null)
+        await refreshPricing(id, promoApplied)
       } catch (e) {
-        setError(apiErrorMessage(e, 'We could not start your order. Try again.'))
+        if (seq !== draftSeqRef.current) return
+        setError(draftErrorMessage(e, profile))
         setPricing(false)
       }
     }
     void run()
-  }, [lines, address, refreshPricing])
+  }, [basketKey, lines, address, profile, paying, promoApplied, refreshPricing])
 
   /**
    * Leaving without paying marks the draft abandoned, so unpaid documents stop
@@ -464,4 +507,33 @@ export default function CheckoutScreen() {
       />
     </>
   )
+}
+
+/**
+ * Why this account cannot place an order, or null. Mirrors the orders create
+ * rule, which admits only an active buyer. An empty profile — still loading,
+ * or an older account missing the fields — is no reason to refuse here.
+ */
+function orderBlocker(profile: object): string | null {
+  const p = profile as Record<string, unknown>
+  const role = asString(p.role)
+  const status = asString(p.accountStatus)
+  if (role && role !== 'buyer') {
+    return `You are signed in with a ${role} account, and only customer accounts can place orders. Sign in with your customer account to check out.`
+  }
+  if (status && status !== 'active') {
+    return `This account is ${status}, so it cannot place orders. Message support to sort it out.`
+  }
+  return null
+}
+
+/** A refused draft gets a reason the customer can act on, not Firestore's wording. */
+function draftErrorMessage(e: unknown, profile: object): string {
+  if ((e as { code?: string } | null)?.code === 'permission-denied') {
+    return (
+      orderBlocker(profile) ??
+      'This account is not set up to place orders yet. Message support and we will sort it out.'
+    )
+  }
+  return apiErrorMessage(e, 'We could not start your order. Try again.')
 }

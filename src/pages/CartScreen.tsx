@@ -201,11 +201,11 @@ function CartRow({
         >
           <span className="t-price">{money(lineTotal(line))}</span>
           <div style={{ flex: 1 }} />
-          {line.quantity === 1 ? (
-            <IconButton label={`Remove ${line.name}`} size={32} onClick={onRemove}>
-              <Trash2 size={16} aria-hidden style={{ color: 'var(--color-danger)' }} />
-            </IconButton>
-          ) : null}
+          {/* At every quantity: stepping a line of five down to one just to
+              reach the bin is five taps for what should be one. */}
+          <IconButton label={`Remove ${line.name}`} size={32} onClick={onRemove}>
+            <Trash2 size={16} aria-hidden style={{ color: 'var(--color-danger)' }} />
+          </IconButton>
           <Stepper
             quantity={line.quantity}
             compact
