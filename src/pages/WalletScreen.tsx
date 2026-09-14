@@ -15,6 +15,7 @@ import {
 import { apiErrorMessage, warmUp } from '../lib/api'
 import { asString, money, timeAgo } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
+import { useBackFromPaystack } from '../hooks/useBackFromPaystack'
 import {
   balance,
   cancelTopUp,
@@ -303,6 +304,7 @@ export function TopUpSheet({ open, onClose }: { open: boolean; onClose: () => vo
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useBackFromPaystack(() => setBusy(false))
 
   useEffect(() => {
     if (open) warmUp()

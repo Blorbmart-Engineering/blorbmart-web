@@ -11,6 +11,7 @@ import { BadgeCheck, LoaderCircle, Wallet } from 'lucide-react'
 import { apiErrorMessage, warmUp } from '../lib/api'
 import { asString, guessNetwork, money, normaliseNgPhone } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
+import { useBackFromPaystack } from '../hooks/useBackFromPaystack'
 import {
   beneficiaries,
   catalog,
@@ -67,6 +68,7 @@ export default function BillFormScreen() {
   const [method, setMethod] = useState<PayMethod>('wallet')
   const [walletBalance, setWalletBalance] = useState(0)
   const [paying, setPaying] = useState(false)
+  useBackFromPaystack(() => setPaying(false))
   const [error, setError] = useState<string | null>(null)
 
   // Minted once per screen and reused across retries, so a double tap on a

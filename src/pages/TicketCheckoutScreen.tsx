@@ -12,6 +12,7 @@ import { Minus, Plus, Ticket, Wallet } from 'lucide-react'
 import { apiErrorMessage, warmUp } from '../lib/api'
 import { money } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
+import { useBackFromPaystack } from '../hooks/useBackFromPaystack'
 import { getEvent, newIdempotencyKey, purchaseTickets } from '../data/events'
 import { balance } from '../data/wallet'
 import {
@@ -44,6 +45,7 @@ export default function TicketCheckoutScreen() {
   const [walletBalance, setWalletBalance] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useBackFromPaystack(() => setBusy(false))
 
   const idempotencyKey = useRef(newIdempotencyKey())
 

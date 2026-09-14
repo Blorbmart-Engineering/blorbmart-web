@@ -12,6 +12,7 @@ import { MapPin, Tag, Wallet, X } from 'lucide-react'
 import { ApiError, apiErrorMessage, warmUp } from '../lib/api'
 import { asDouble, asString, money } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
+import { useBackFromPaystack } from '../hooks/useBackFromPaystack'
 import {
   abandonDraft,
   calculatePricing,
@@ -68,6 +69,16 @@ export default function CheckoutScreen() {
   // basket; when the basket changes, the draft is replaced rather than paid.
   const draftBasketRef = useRef<string | null>(null)
   const draftSeqRef = useRef(0)
+
+  // Back from Cancel on Paystack. The draft already carries the payment
+  // reference sent to Paystack, which the backend would reuse, so a retry
+  // gets a fresh draft — what the refresh that used to be the only way out
+  // did.
+  useBackFromPaystack(() => {
+    paidRef.current = false
+    draftBasketRef.current = null
+    setPaying(false)
+  })
 
   const address = session.address
   const profile = session.profile
