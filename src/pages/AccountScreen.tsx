@@ -34,6 +34,7 @@ import { APP_VERSION } from '../lib/config'
 import { maskPhone } from '../lib/format'
 import { addressLabel } from '../models/address'
 import { canPromptForPush, isStandalone, pushState, requestPush } from '../lib/push'
+import { supportUrl } from '../lib/support'
 import type { University } from '../data/university'
 import {
   canChooseCampus,
@@ -54,9 +55,6 @@ import { AppBar, ScreenBody, showToast } from '../ui/Screen'
 import { CampusSheet } from '../components/AuthWidgets'
 import { SmartImage } from '../ui/SmartImage'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
-
-const SUPPORT_URL =
-  'https://wa.me/2349022594853?text=' + encodeURIComponent('Hello Blorbmart, I need help')
 
 const openExternal = (url: string) => window.open(url, '_blank', 'noopener,noreferrer')
 
@@ -222,7 +220,7 @@ export default function AccountScreen() {
             icon={<MessageCircle size={21} aria-hidden />}
             label="Chat with support"
             subtitle="We reply on WhatsApp"
-            onClick={() => openExternal(SUPPORT_URL)}
+            onClick={() => openExternal(supportUrl())}
           />
           <Tile
             icon={<HelpCircle size={21} aria-hidden />}

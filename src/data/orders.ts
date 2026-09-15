@@ -13,7 +13,6 @@ import {
   query as fbQuery,
   runTransaction,
   serverTimestamp,
-  setDoc,
   where,
 } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
@@ -27,103 +26,37 @@ import {
   orderFromMap,
   type BlorbOrder,
 } from '../models/order'
-import { cachedVendor } from './catalog'
-
-async function profileSnapshot(uid: string): Promise<{ name: string; phone: string }> {
-  try {
-    const snap = await getDoc(doc(db, 'users', uid))
-    const data = snap.data() ?? {}
-    return {
-      name: [asString(data.firstName), asString(data.lastName)].filter(Boolean).join(' '),
-      phone: asString(data.phone),
-    }
-  } catch {
-    return { name: '', phone: '' }
-  }
-}
-
 /**
- * Creates the order document. Payment happens separately, so an order exists
- * in `pending` until money clears — which is what lets a customer abandon
- * Paystack and come back to the same order rather than a new one.
+ * Starts the order: the backend writes the unpaid draft and answers with its
+ * id. Payment happens separately, so an order exists in `pending` until money
+ * clears — which is what lets a customer abandon Paystack and come back to the
+ * same order rather than a new one.
+ *
+ * This used to be a Firestore write from here, and any account the security
+ * rules refused got a bare "permission-denied" at the last step of checkout.
+ * The server checks the account instead, repairs what sign-up should have
+ * written, and refuses the rest with an ApiError carrying a `code` and a
+ * sentence meant for the customer.
  */
 export async function createOrder({
   lines,
   address,
-  subtotal,
-  deliveryFee,
-  serviceFee,
-  discount = 0,
-  promoCode,
   note,
   vertical = 'restaurants',
 }: {
   lines: CartLine[]
   address: Record<string, unknown>
-  subtotal: number
-  deliveryFee: number
-  serviceFee: number
-  discount?: number
-  promoCode?: string
   note?: string
   vertical?: Vertical
 }): Promise<string> {
-  const user = auth.currentUser
-  if (!user) throw new ApiError('Please sign in to order.')
+  if (!auth.currentUser) throw new ApiError('Please sign in to order.')
   if (!lines.length) throw new ApiError('Your basket is empty.')
 
-  const uid = user.uid
-  const orderId = `ORD${Date.now()}`
-  const total = subtotal - discount + deliveryFee + serviceFee
-
-  const storeIds = [...new Set(lines.map((l) => l.storeId))]
-  const profile = await profileSnapshot(uid)
-
-  // The vendor ACCOUNT ids behind those stores, not the store ids.
-  //
-  // Firestore rules scope a vendor's order reads to `vendorIds.hasAny([their
-  // uid])`, so putting store ids here would leave every vendor unable to see
-  // their own orders. Resolved from the warm catalogue index, which every path
-  // into checkout has already loaded.
-  const vendorIds = [
-    ...new Set(
-      storeIds.map((id) => cachedVendor(id)?.vendorId ?? '').filter((id) => id.length > 0),
-    ),
-  ]
-
-  const payload = lines.map(cartLineToMap)
-
-  await setDoc(doc(db, 'orders', orderId), {
-    orderId,
-    userId: uid,
-    userEmail: user.email ?? '',
-    userName: profile.name || user.displayName || '',
-    userPhone: profile.phone || user.phoneNumber || '',
-    storeId: lines[0].storeId,
-    storeName: lines[0].storeName,
-    vendorIds,
-    storeIds,
-    storeCount: storeIds.length,
-    vertical,
-    lines: payload,
-    items: payload,
-    totalItems: lines.reduce((n, l) => n + l.quantity, 0),
-    subtotal,
-    deliveryFee,
-    serviceFee,
-    discountAmount: discount,
-    totalAmount: total,
-    ...(promoCode ? { promoCode } : {}),
-    ...(note ? { customerNote: note } : {}),
-    address,
-    orderStatus: 'placed',
-    paymentStatus: 'pending',
-    paymentMethod: '',
-    etaMinutes: 35,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  const data = await Api.post('/api/orders/draft', {
+    body: { lines: lines.map(cartLineToMap), address, vertical, ...(note ? { note } : {}) },
   })
-
+  const orderId = asString(data.orderId)
+  if (!orderId) throw new ApiError('We could not start your order. Try again.')
   return orderId
 }
 

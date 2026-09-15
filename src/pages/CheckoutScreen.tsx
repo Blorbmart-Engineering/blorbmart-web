@@ -12,6 +12,7 @@ import { MapPin, Tag, Wallet, X } from 'lucide-react'
 import { ApiError, apiErrorMessage, warmUp } from '../lib/api'
 import { asDouble, asString, money } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
+import { supportUrl } from '../lib/support'
 import { useBackFromPaystack } from '../hooks/useBackFromPaystack'
 import {
   abandonDraft,
@@ -24,7 +25,7 @@ import {
 import { balance, invalidateBalance } from '../data/wallet'
 import { addressToFirestore, addressLabel } from '../models/address'
 import { cartSubtotal, cartVertical, useCartStore } from '../store/cartStore'
-import { useSessionStore } from '../store/sessionStore'
+import { sessionEmail, useSessionStore } from '../store/sessionStore'
 import { Button } from '../ui/Button'
 import { Card, DashedDivider, EmptyState, SummaryRow } from '../ui/kit'
 import { PressScale } from '../ui/motion'
@@ -62,6 +63,10 @@ export default function CheckoutScreen() {
   const [paying, setPaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [addressOpen, setAddressOpen] = useState(false)
+  // Set when the draft could not be started. The footer then offers the one
+  // thing that helps, instead of a Pay button that can do nothing.
+  const [blocked, setBlocked] = useState<DraftFailure['kind'] | null>(null)
+  const [draftAttempt, setDraftAttempt] = useState(0)
 
   const paidRef = useRef(false)
   const orderIdRef = useRef<string | null>(null)
@@ -153,6 +158,7 @@ export default function CheckoutScreen() {
     const blocker = orderBlocker(profile)
     if (lines.length && blocker) {
       setError(blocker)
+      setBlocked('account')
       setPricing(false)
       return
     }
@@ -173,15 +179,13 @@ export default function CheckoutScreen() {
     setTotal(basketTotal)
     setPricing(true)
     setError(null)
+    setBlocked(null)
 
     const run = async () => {
       try {
         const id = await createOrder({
           lines,
           address: addressToFirestore(address),
-          subtotal: basketTotal,
-          deliveryFee: 0,
-          serviceFee: 0,
           vertical: cartVertical(lines),
         })
         if (seq !== draftSeqRef.current || paidRef.current) {
@@ -194,12 +198,20 @@ export default function CheckoutScreen() {
         await refreshPricing(id, promoApplied)
       } catch (e) {
         if (seq !== draftSeqRef.current) return
-        setError(draftErrorMessage(e, profile))
+        const failure = draftFailure(e)
+        setError(failure.message)
+        setBlocked(failure.kind)
         setPricing(false)
       }
     }
     void run()
-  }, [basketKey, lines, address, profile, paying, promoApplied, refreshPricing])
+  }, [basketKey, lines, address, profile, paying, promoApplied, refreshPricing, draftAttempt])
+
+  /** Writes the draft again for the same basket, after a failure worth retrying. */
+  const retryDraft = () => {
+    draftBasketRef.current = null
+    setDraftAttempt((n) => n + 1)
+  }
 
   /**
    * Leaving without paying marks the draft abandoned, so unpaid documents stop
@@ -499,13 +511,21 @@ export default function CheckoutScreen() {
       </ScreenBody>
 
       <StickyFooter>
-        <Button
-          label={pricing ? 'Working out the total…' : `Pay ${money(total)}`}
-          busy={paying}
-          disabled={pricing || !orderId || !address}
-          glow
-          onClick={() => void pay()}
-        />
+        {blocked === 'account' ? (
+          // Only support can fix an account, so that is what the button does,
+          // with the account's email already in the message.
+          <Button label="Message support" glow onClick={() => openSupport(sessionEmail(session))} />
+        ) : blocked === 'retry' ? (
+          <Button label="Try again" glow onClick={retryDraft} />
+        ) : (
+          <Button
+            label={pricing ? 'Working out the total…' : `Pay ${money(total)}`}
+            busy={paying}
+            disabled={pricing || !orderId || !address}
+            glow
+            onClick={() => void pay()}
+          />
+        )}
       </StickyFooter>
 
       <AddressSheet
@@ -521,9 +541,10 @@ export default function CheckoutScreen() {
 }
 
 /**
- * Why this account cannot place an order, or null. Mirrors the orders create
- * rule, which admits only an active buyer. An empty profile — still loading,
- * or an older account missing the fields — is no reason to refuse here.
+ * Why this account cannot place an order, or null — said before a round trip
+ * that would only be refused. Mirrors the server's account check
+ * (buyerAccountService). An empty profile, still loading or missing the
+ * fields, is no reason to refuse: the server repairs those.
  */
 function orderBlocker(profile: object): string | null {
   const p = profile as Record<string, unknown>
@@ -538,13 +559,30 @@ function orderBlocker(profile: object): string | null {
   return null
 }
 
-/** A refused draft gets a reason the customer can act on, not Firestore's wording. */
-function draftErrorMessage(e: unknown, profile: object): string {
-  if ((e as { code?: string } | null)?.code === 'permission-denied') {
-    return (
-      orderBlocker(profile) ??
-      'This account is not set up to place orders yet. Message support and we will sort it out.'
-    )
+/** The server's codes for an account that cannot order (buyerAccountService.ACCOUNT_CODES). */
+const ACCOUNT_CODES = ['WRONG_ACCOUNT_TYPE', 'ACCOUNT_NOT_ACTIVE']
+
+interface DraftFailure {
+  message: string
+  /** 'account': only support can fix it. 'retry': worth another go. */
+  kind: 'account' | 'retry'
+}
+
+/**
+ * Why the draft could not be started, and the one useful next step. The
+ * server's refusals are already written for the customer, so they are shown
+ * as they come.
+ */
+function draftFailure(e: unknown): DraftFailure {
+  if (e instanceof ApiError && e.code && ACCOUNT_CODES.includes(e.code)) {
+    return { message: e.message, kind: 'account' }
   }
-  return apiErrorMessage(e, 'We could not start your order. Try again.')
+  return { message: apiErrorMessage(e, 'We could not start your order. Try again.'), kind: 'retry' }
+}
+
+function openSupport(email: string) {
+  const message = email
+    ? `Hello Blorbmart, I cannot place an order. My account email is ${email}.`
+    : 'Hello Blorbmart, I cannot place an order.'
+  window.open(supportUrl(message), '_blank', 'noopener,noreferrer')
 }
