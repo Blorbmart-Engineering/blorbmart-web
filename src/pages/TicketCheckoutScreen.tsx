@@ -14,7 +14,7 @@ import { money } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
 import { useBackFromPaystack } from '../hooks/useBackFromPaystack'
 import { getEvent, newIdempotencyKey, purchaseTickets } from '../data/events'
-import { balance } from '../data/wallet'
+import { balance, watchLiveBalance } from '../data/wallet'
 import {
   orderCeiling,
   ticketIsFree,
@@ -52,6 +52,8 @@ export default function TicketCheckoutScreen() {
   useEffect(() => {
     warmUp()
     void balance().then(setWalletBalance)
+    // Live, so a top-up finished in another tab is usable here at once.
+    return watchLiveBalance(setWalletBalance)
   }, [])
 
   useEffect(() => {

@@ -26,6 +26,7 @@ import {
   entryTitle,
   startTopUp,
   transactions,
+  watchLiveBalance,
   type WalletEntry,
 } from '../data/wallet'
 import { isSignedIn, useSessionStore } from '../store/sessionStore'
@@ -62,6 +63,22 @@ export default function WalletScreen() {
     warmUp()
     void load()
   }, [signedIn, load])
+
+  // The balance follows the wallet document, and the list below it is re-read
+  // whenever the balance moves — a top-up or a refund shows up on this screen
+  // without a reload (QA-BM-WEB-002, item 5).
+  useEffect(() => {
+    if (!signedIn) return
+    let first = true
+    return watchLiveBalance((value) => {
+      setAmount(value)
+      if (first) {
+        first = false
+        return
+      }
+      void transactions(20).then(setEntries)
+    })
+  }, [signedIn])
 
   if (!signedIn) {
     return (

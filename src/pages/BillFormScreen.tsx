@@ -20,7 +20,7 @@ import {
   serviceById,
   variations,
 } from '../data/bills'
-import { balance } from '../data/wallet'
+import { balance, watchLiveBalance } from '../data/wallet'
 import {
   isVerifiable,
   needsAccount,
@@ -79,6 +79,8 @@ export default function BillFormScreen() {
     warmUp()
     void balance().then(setWalletBalance)
     void beneficiaries().then(setSaved)
+    // Live, so a top-up finished in another tab is usable here at once.
+    return watchLiveBalance(setWalletBalance)
   }, [])
 
   useEffect(() => {

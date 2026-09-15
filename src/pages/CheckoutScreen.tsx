@@ -22,7 +22,7 @@ import {
   payWithWallet,
   startPaystack,
 } from '../data/orders'
-import { balance, invalidateBalance } from '../data/wallet'
+import { balance, invalidateBalance, watchLiveBalance } from '../data/wallet'
 import { addressToFirestore, addressLabel } from '../models/address'
 import { cartSubtotal, cartVertical, useCartStore } from '../store/cartStore'
 import { sessionEmail, useSessionStore } from '../store/sessionStore'
@@ -97,6 +97,8 @@ export default function CheckoutScreen() {
   useEffect(() => {
     warmUp()
     void balance().then(setWalletBalance)
+    // Live, so a top-up finished in another tab is usable here at once.
+    return watchLiveBalance(setWalletBalance)
   }, [])
 
   const refreshPricing = useCallback(

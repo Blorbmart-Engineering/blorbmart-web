@@ -3,9 +3,40 @@
    A port of lib/data/repos/wallet_repo.dart.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { auth } from '../lib/firebase'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { auth, db } from '../lib/firebase'
 import { Api, ApiError } from '../lib/api'
 import { asDate, asDouble, asString } from '../lib/format'
+
+/**
+ * The balance, live.
+ *
+ * `balance()` below is a one-off read, cached for a minute. Screens that used
+ * only that showed whatever the balance was when they opened, so money that
+ * landed — a top-up finishing, a refund — did not appear until the customer
+ * reloaded (QA-BM-WEB-002, item 5). This follows the wallet document itself,
+ * which the backend rewrites on every movement, and keeps the cache in step
+ * so the next `balance()` agrees with what is on screen.
+ *
+ * Returns the unsubscribe function, so an effect can return it directly.
+ */
+export function watchLiveBalance(onValue: (value: number) => void): () => void {
+  const uid = auth.currentUser?.uid
+  if (!uid) return () => undefined
+  return onSnapshot(
+    doc(db, 'wallets', uid),
+    (snap) => {
+      // An account from before wallets had their own document has none;
+      // `balance()` covers it through the API's fallback.
+      if (!snap.exists()) return
+      const value = asDouble(snap.data().balance)
+      cachedBalance = value
+      cachedAt = Date.now()
+      onValue(value)
+    },
+    (error) => console.warn('[wallet] live balance stopped', error.code),
+  )
+}
 
 /** One line in the wallet ledger. */
 export interface WalletEntry {
