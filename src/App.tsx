@@ -11,6 +11,7 @@ import { Toaster } from 'react-hot-toast'
 import ErrorBoundary from './components/ErrorBoundary'
 import AppShell from './components/AppShell'
 import PaymentReturn from './components/PaymentReturn'
+import RouteSeo from './components/RouteSeo'
 import { InstallBanner } from './components/InstallBanner'
 import { SplashVisual } from './components/SplashVisual'
 import { isSignedIn, useSessionStore } from './store/sessionStore'
@@ -141,6 +142,7 @@ export default function App() {
       <BrowserRouter>
         <Boot />
         <ScrollToTop />
+        <RouteSeo />
         <ForegroundPush />
         <PaymentReturn />
         <InstallBanner />

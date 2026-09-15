@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-NG">
   <head>
     <meta charset="UTF-8" />
     <!-- viewport-fit=cover is what lets the app paint under a notch; the
@@ -9,11 +9,16 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes"
     />
 
-    <title>Blorbmart — Everything you are hungry for</title>
+    <!-- Defaults for the front door. Every route rewrites the title,
+         description, canonical URL and robots rule for itself once it mounts
+         (src/lib/seo.ts), so there is deliberately no canonical here: one in
+         the shell would tell Google every URL is the home page. -->
+    <title>Blorbmart — Order food, bills &amp; event tickets on campus</title>
     <meta
       name="description"
-      content="Restaurants, pharmacies, event tickets and your monthly bills. One app, one basket, one rider."
+      content="Order from campus kitchens and pharmacies, top up airtime and data, pay for power and TV, and buy event tickets. Live at UNIOSUN, LAUTECH, UNN and OOU."
     />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
 
     <!-- Matches --color-brand, so the Android status bar and the task
          switcher card carry the brand rather than a browser default. -->
@@ -43,16 +48,30 @@
     <meta name="apple-mobile-web-app-title" content="Blorbmart" />
     <meta name="application-name" content="Blorbmart" />
 
-    <!-- Social preview: a shared storefront link is a real acquisition channel -->
+    <!-- Social preview: a shared storefront link is a real acquisition
+         channel. Store and event links get their own card from
+         api/share.js, because preview bots do not run the app. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Blorbmart" />
-    <meta property="og:title" content="Blorbmart — Everything you are hungry for" />
+    <meta property="og:locale" content="en_NG" />
+    <meta property="og:url" content="https://shop.blorbmart.com.ng/" />
+    <meta property="og:title" content="Blorbmart — Order food, bills &amp; event tickets on campus" />
     <meta
       property="og:description"
       content="Restaurants, pharmacies, event tickets and your monthly bills. One app, one basket, one rider."
     />
-    <meta property="og:image" content="/icons/icon-512.png" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content="https://shop.blorbmart.com.ng/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Blorbmart — order food, pay bills and buy event tickets on campus" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@blorbmart" />
+    <meta name="twitter:title" content="Blorbmart — Order food, bills &amp; event tickets on campus" />
+    <meta
+      name="twitter:description"
+      content="Restaurants, pharmacies, event tickets and your monthly bills. One app, one basket, one rider."
+    />
+    <meta name="twitter:image" content="https://shop.blorbmart.com.ng/og.png" />
 
     <!--
       Fonts: preconnect both hosts, then load one variable family.
@@ -71,6 +90,45 @@
     <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://blorbmart-tr1i.onrender.com" crossorigin />
     <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+
+    <!-- The shop as a site and as an app, published by the company whose
+         Organization is defined on www. Store and event screens add their
+         own Restaurant / Event data next to this. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://shop.blorbmart.com.ng/#website",
+            "url": "https://shop.blorbmart.com.ng/",
+            "name": "Blorbmart",
+            "description": "Order food, pay bills and buy event tickets on Nigerian university campuses.",
+            "inLanguage": "en-NG",
+            "publisher": { "@id": "https://www.blorbmart.com.ng/#organization" }
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://shop.blorbmart.com.ng/#app",
+            "name": "Blorbmart",
+            "url": "https://shop.blorbmart.com.ng/",
+            "description": "Order food, pay bills and buy event tickets in the browser. Installable on any phone.",
+            "applicationCategory": "ShoppingApplication",
+            "operatingSystem": "Any",
+            "browserRequirements": "Requires JavaScript",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "NGN" },
+            "publisher": { "@id": "https://www.blorbmart.com.ng/#organization" }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://www.blorbmart.com.ng/#organization",
+            "name": "Blorbmart",
+            "legalName": "Blorbmart Limited",
+            "url": "https://www.blorbmart.com.ng/"
+          }
+        ]
+      }
+    </script>
 
     <style>
       /* Paint the brand ground immediately so the first frame is never
@@ -93,7 +151,10 @@
     <noscript>
       <div style="padding: 24px; font-family: system-ui, sans-serif; text-align: center">
         <h1 style="font-size: 20px">Blorbmart needs JavaScript</h1>
-        <p style="color: #39455a">Please enable JavaScript to order.</p>
+        <p style="color: #39455a">
+          Please enable JavaScript to order food, pay bills and buy event tickets on your campus. Learn more at
+          <a href="https://www.blorbmart.com.ng/">www.blorbmart.com.ng</a>.
+        </p>
       </div>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>

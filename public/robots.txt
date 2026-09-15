@@ -1,0 +1,28 @@
+# shop.blorbmart.com.ng — the Blorbmart buyer app.
+# Storefronts, events, hubs and bills are public. Baskets, orders, wallets,
+# tickets and receipts belong to one person and are kept out of search.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /cart
+Disallow: /checkout
+Disallow: /order-placed/
+Disallow: /orders
+Disallow: /track/
+Disallow: /track-order/
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /bills/pay/
+Disallow: /bills/receipt/
+Disallow: /bills/history
+Disallow: /events/*/checkout
+Disallow: /tickets
+Disallow: /account
+Disallow: /addresses
+Disallow: /notifications
+Disallow: /receipt/
+Disallow: /search
+Disallow: /verify
+Disallow: /forgot-password
+
+Sitemap: https://shop.blorbmart.com.ng/sitemap.xml

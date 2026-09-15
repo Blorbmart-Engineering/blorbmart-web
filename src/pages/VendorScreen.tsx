@@ -10,6 +10,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Bike, Clock, Search, ShoppingBasket, Star, UtensilsCrossed } from 'lucide-react'
 import { menuStream, vendor as fetchVendor } from '../data/catalog'
 import { money, titleCase } from '../lib/format'
+import { applySeo, storeSeo } from '../lib/seo'
 import {
   etaLabel,
   hasFreeDelivery,
@@ -89,6 +90,13 @@ export default function VendorScreen() {
       // something the customer can actually order.
       .sort((a, b) => Number(isSoldOut(a)) - Number(isSoldOut(b)))
   }, [items, section, query])
+
+  // What search engines and shared links show for this storefront: its
+  // name, city and banner, and its menu as structured data.
+  useEffect(() => {
+    if (missing) applySeo({ title: 'Store not found | Blorbmart', noindex: true })
+    else if (store) applySeo(storeSeo(store, items))
+  }, [store, items, missing])
 
   if (missing) {
     return (

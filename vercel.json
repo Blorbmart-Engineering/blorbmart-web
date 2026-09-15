@@ -5,6 +5,32 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/sitemap-live.xml",
+      "destination": "/api/sitemap-live"
+    },
+    {
+      "source": "/events/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Pinterest|redditbot|SkypeUriPreview|Embedly|vkShare|Viber).*"
+        }
+      ],
+      "destination": "/api/share?kind=event&id=:id"
+    },
+    {
+      "source": "/r/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Pinterest|redditbot|SkypeUriPreview|Embedly|vkShare|Viber).*"
+        }
+      ],
+      "destination": "/api/share?kind=store&id=:id"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
@@ -31,6 +57,10 @@
     {
       "source": "/icons/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }]
+    },
+    {
+      "source": "/(robots.txt|sitemap.xml|sitemap-pages.xml)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
     },
     {
       "source": "/(.*)",

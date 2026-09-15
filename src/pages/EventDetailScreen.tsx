@@ -10,6 +10,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { CalendarDays, MapPin, Ticket, Users } from 'lucide-react'
 import { getEvent } from '../data/events'
 import { dayAndTime } from '../lib/format'
+import { applySeo, eventSeo } from '../lib/seo'
 import {
   eventHasEnded,
   eventWhereLabel,
@@ -52,6 +53,13 @@ export default function EventDetailScreen() {
       cancelled = true
     }
   }, [id])
+
+  // The event's own title, date, venue and cover for search and shared
+  // links, plus Event structured data so Google can list it with its date.
+  useEffect(() => {
+    if (event === null) applySeo({ title: 'Event not found | Blorbmart', noindex: true })
+    else if (event) applySeo(eventSeo(event))
+  }, [event])
 
   if (event === undefined) {
     return (
