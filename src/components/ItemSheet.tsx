@@ -6,7 +6,7 @@
    for what is missing.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { Clock, Flame, Minus, Plus } from 'lucide-react'
 import { compactCount, money } from '../lib/format'
 import {
@@ -20,7 +20,12 @@ import {
   itemImage,
   type MenuItem,
 } from '../models/catalog'
-import { cartLineFrom, type SelectedAddon } from '../models/cart'
+import {
+  addonUnits,
+  cartLineFrom,
+  MAX_ADDON_QUANTITY,
+  type SelectedAddon,
+} from '../models/cart'
 import {
   cartBelongsToOtherStore,
   cartStoreName,
@@ -32,6 +37,75 @@ import { PressScale } from '../ui/motion'
 import { ConfirmDialog, Sheet } from '../ui/Sheet'
 import { SmartImage } from '../ui/SmartImage'
 import { showToast } from '../ui/Screen'
+
+/**
+ * More than one of the same add-on.
+ *
+ * Two Cokes with one plate of rice was previously impossible: every option
+ * was a single tick, so the only way to ask for a second drink was to order
+ * the whole dish twice (QA, 15 Sep 2026, item 2). It appears only once the
+ * option is ticked, so an untouched list still reads as a plain set of
+ * choices.
+ */
+function AddonStepper({
+  name,
+  quantity,
+  canAdd,
+  onStep,
+}: {
+  name: string
+  quantity: number
+  canAdd: boolean
+  onStep: (by: number) => void
+}) {
+  const round = (enabled: boolean): CSSProperties => ({
+    display: 'grid',
+    placeItems: 'center',
+    width: 28,
+    height: 28,
+    flexShrink: 0,
+    borderRadius: '50%',
+    background: 'var(--color-surface)',
+    color: enabled ? 'var(--color-brand)' : 'var(--color-ink-disabled)',
+  })
+
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        flexShrink: 0,
+        padding: 3,
+        borderRadius: 'var(--radius-md)',
+        background: 'var(--color-surface-sunken)',
+      }}
+    >
+      <button
+        type="button"
+        className="press"
+        aria-label={`One less ${name}`}
+        onClick={() => onStep(-1)}
+        style={round(true)}
+      >
+        <Minus size={14} aria-hidden />
+      </button>
+      <span className="t-h4 tnum" style={{ minWidth: 18, textAlign: 'center' }} aria-live="polite">
+        {quantity}
+      </span>
+      <button
+        type="button"
+        className="press"
+        aria-label={`One more ${name}`}
+        disabled={!canAdd}
+        onClick={() => onStep(1)}
+        style={round(canAdd)}
+      >
+        <Plus size={14} aria-hidden />
+      </button>
+    </div>
+  )
+}
 
 export function ItemSheet({
   item,
@@ -59,7 +133,7 @@ export function ItemSheet({
       const chosen = group.options
         .filter((o) => o.isDefault && o.available)
         .slice(0, Math.max(group.max, 1))
-        .map((o) => ({ group: group.name, name: o.name, price: o.price }))
+        .map((o) => ({ group: group.name, name: o.name, price: o.price, quantity: 1 }))
       if (chosen.length) defaults[group.id] = chosen
     }
     setSelected(defaults)
@@ -72,14 +146,16 @@ export function ItemSheet({
 
   const unsatisfied = useMemo(() => {
     if (!item) return []
+    // Counted in units: a group asking for two is satisfied by two of one
+    // option just as well as by one of each.
     return item.addonGroups.filter(
-      (g) => isGroupRequired(g) && (selected[g.id]?.length ?? 0) < g.min,
+      (g) => isGroupRequired(g) && addonUnits(selected[g.id] ?? []) < g.min,
     )
   }, [item, selected])
 
   if (!item) return null
 
-  const addonTotal = addons.reduce((sum, a) => sum + a.price, 0)
+  const addonTotal = addons.reduce((sum, a) => sum + a.price * a.quantity, 0)
   const unitTotal = effectivePrice(item) + addonTotal + item.packagingFee
   const total = unitTotal * quantity
 
@@ -102,8 +178,37 @@ export function ItemSheet({
       if (already) {
         return { ...prev, [groupId]: current.filter((a) => a.name !== option.name) }
       }
-      if (current.length >= max) return prev
+      if (addonUnits(current) >= max) return prev
       return { ...prev, [groupId]: [...current, option] }
+    })
+  }
+
+  /**
+   * More, or fewer, of one add-on.
+   *
+   * A group's `max` is spent in units rather than in distinct options, so two
+   * Cokes fill an "up to 2" group exactly as one Coke and one water would.
+   * Stepping the last one down to zero is how an add-on is removed, which
+   * keeps the tick and the stepper telling the same story.
+   */
+  const step = (groupId: string, name: string, by: number, max: number) => {
+    setSelected((prev) => {
+      const current = prev[groupId] ?? []
+      const chosen = current.find((a) => a.name === name)
+      if (!chosen) return prev
+
+      // Stepping the last one down is the same as unticking it, and is
+      // allowed on a required group for the same reason unticking is: the
+      // shortfall shows up in the button label rather than in a tap that
+      // does nothing.
+      const next = chosen.quantity + by
+      if (next < 1) return { ...prev, [groupId]: current.filter((a) => a.name !== name) }
+      if (by > 0 && (addonUnits(current) >= max || next > MAX_ADDON_QUANTITY)) return prev
+
+      return {
+        ...prev,
+        [groupId]: current.map((a) => (a.name === name ? { ...a, quantity: next } : a)),
+      }
     })
   }
 
@@ -211,6 +316,11 @@ export function ItemSheet({
           {item.addonGroups.map((group) => {
             const chosen = selected[group.id] ?? []
             const multi = isMultiSelect(group)
+            // Counts are spent against the group's maximum, so a group can
+            // now be filled by three of one option rather than only by three
+            // different ones. A tap that lands on a full group says so
+            // instead of doing nothing.
+            const full = multi && addonUnits(chosen) >= group.max
             return (
               <div key={group.id} style={{ marginBottom: 'var(--gap-xl)' }}>
                 <div
@@ -233,52 +343,87 @@ export function ItemSheet({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-sm)' }}>
                   {group.options.map((option) => {
-                    const isChosen = chosen.some((a) => a.name === option.name)
+                    const picked = chosen.find((a) => a.name === option.name)
+                    const isChosen = Boolean(picked)
                     const disabled = !option.available
+                    // A stepper only where repeating is allowed. On a
+                    // single-choice group it would contradict the rule
+                    // printed on the pill beside the heading.
+                    const repeatable = multi && isChosen && !disabled
                     return (
-                      <PressScale
+                      <div
                         key={option.name}
-                        scale={0.99}
-                        disabled={disabled}
-                        onClick={() =>
-                          toggle(
-                            group.id,
-                            { group: group.name, name: option.name, price: option.price },
-                            multi,
-                            group.max,
-                          )
-                        }
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 'var(--gap-md)',
-                          width: '100%',
-                          padding: 'var(--gap-md)',
+                          gap: 'var(--gap-sm)',
                           borderRadius: 'var(--radius-md)',
                           background: isChosen
                             ? 'var(--color-brand-soft)'
                             : 'var(--color-surface)',
                           border: `1px solid ${isChosen ? 'var(--color-brand)' : 'var(--color-line)'}`,
                           opacity: disabled ? 0.5 : 1,
-                          textAlign: 'left',
+                          paddingRight: repeatable ? 'var(--gap-sm)' : undefined,
                         }}
                       >
-                        <span
-                          aria-hidden
-                          style={{
-                            width: 20,
-                            height: 20,
-                            flexShrink: 0,
-                            borderRadius: multi ? 'var(--radius-xs)' : '50%',
-                            border: `2px solid ${isChosen ? 'var(--color-brand)' : 'var(--color-line-strong)'}`,
-                            background: isChosen ? 'var(--color-brand)' : 'transparent',
-                            boxShadow: isChosen ? 'inset 0 0 0 3px var(--color-surface)' : undefined,
+                        <PressScale
+                          scale={0.99}
+                          disabled={disabled}
+                          onClick={() => {
+                            if (full && !isChosen) {
+                              showToast(
+                                `Up to ${group.max} in ${group.name.toLowerCase()} — take one off first.`,
+                              )
+                              return
+                            }
+                            toggle(
+                              group.id,
+                              {
+                                group: group.name,
+                                name: option.name,
+                                price: option.price,
+                                quantity: 1,
+                              },
+                              multi,
+                              group.max,
+                            )
                           }}
-                        />
-                        <span className="t-body clamp-1" style={{ flex: 1, minWidth: 0 }}>
-                          {disabled ? `${option.name} · unavailable` : addonOptionLabel(option)}
-                        </span>
-                      </PressScale>
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 'var(--gap-md)',
+                            flex: 1,
+                            minWidth: 0,
+                            padding: 'var(--gap-md)',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span
+                            aria-hidden
+                            style={{
+                              width: 20,
+                              height: 20,
+                              flexShrink: 0,
+                              borderRadius: multi ? 'var(--radius-xs)' : '50%',
+                              border: `2px solid ${isChosen ? 'var(--color-brand)' : 'var(--color-line-strong)'}`,
+                              background: isChosen ? 'var(--color-brand)' : 'transparent',
+                              boxShadow: isChosen ? 'inset 0 0 0 3px var(--color-surface)' : undefined,
+                            }}
+                          />
+                          <span className="t-body clamp-1" style={{ flex: 1, minWidth: 0 }}>
+                            {disabled ? `${option.name} · unavailable` : addonOptionLabel(option)}
+                          </span>
+                        </PressScale>
+
+                        {repeatable && (
+                          <AddonStepper
+                            name={option.name}
+                            quantity={picked!.quantity}
+                            canAdd={addonUnits(chosen) < group.max && picked!.quantity < MAX_ADDON_QUANTITY}
+                            onStep={(by) => step(group.id, option.name, by, group.max)}
+                          />
+                        )}
+                      </div>
                     )
                   })}
                 </div>

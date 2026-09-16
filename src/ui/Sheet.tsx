@@ -23,26 +23,78 @@ import { SheetHandle } from './kit'
  * ignores the latter on `body` and scrolls the page under the sheet anyway.
  * The scroll offset is restored on close so nobody loses their place in a
  * long menu.
+ *
+ * ── Why the gutter is held open ────────────────────────────────────────────
+ *
+ * Fixing the body stops the document scrolling, so a desktop browser takes
+ * its scrollbar away — and with it about fifteen pixels of page width. `#root`
+ * is a 520px column centred with `margin-inline: auto`, so that width
+ * arriving and leaving slides the entire app sideways every time a sheet
+ * opens or closes. That is the "page shifts left and right" a customer sees
+ * while opening a dish. Padding the body by exactly the width the scrollbar
+ * gave up keeps the column where it was.
+ *
+ * Fixed overlays are laid out against the viewport rather than the padded
+ * body, so they are told the same figure through `--scroll-gutter` and pad
+ * themselves — otherwise the sheet would centre half a scrollbar to the right
+ * of the column it belongs to.
  */
+let lockDepth = 0
+let release: (() => void) | null = null
+
+function lockBody() {
+  if (lockDepth++ > 0) return
+
+  const y = window.scrollY
+  const { body } = document
+  const root = document.documentElement
+  // Measured off the box rather than off clientWidth, which is rounded to a
+  // whole pixel: at a fractional device scale a 15.33px scrollbar reads as 15
+  // and leaves a third of a pixel of the jump behind.
+  const gutter = window.innerWidth - root.getBoundingClientRect().width
+  const previous = {
+    position: body.style.position,
+    top: body.style.top,
+    width: body.style.width,
+    paddingRight: body.style.paddingRight,
+  }
+
+  body.style.position = 'fixed'
+  body.style.top = `-${y}px`
+  body.style.width = '100%'
+  if (gutter > 0) {
+    body.style.paddingRight = `${gutter}px`
+    root.style.setProperty('--scroll-gutter', `${gutter}px`)
+  }
+
+  release = () => {
+    body.style.position = previous.position
+    body.style.top = previous.top
+    body.style.width = previous.width
+    body.style.paddingRight = previous.paddingRight
+    root.style.removeProperty('--scroll-gutter')
+    window.scrollTo(0, y)
+  }
+}
+
+/**
+ * Counted, because a sheet can open a dialog on top of itself — the basket
+ * conflict in the dish customiser does exactly that. An uncounted lock would
+ * let the dialog closing unfix the body while the sheet behind it is still
+ * open, dropping the customer back to the top of the menu.
+ */
+function unlockBody() {
+  lockDepth = Math.max(0, lockDepth - 1)
+  if (lockDepth > 0) return
+  release?.()
+  release = null
+}
+
 function useScrollLock(active: boolean) {
   useEffect(() => {
     if (!active) return
-    const y = window.scrollY
-    const { body } = document
-    const previous = {
-      position: body.style.position,
-      top: body.style.top,
-      width: body.style.width,
-    }
-    body.style.position = 'fixed'
-    body.style.top = `-${y}px`
-    body.style.width = '100%'
-    return () => {
-      body.style.position = previous.position
-      body.style.top = previous.top
-      body.style.width = previous.width
-      window.scrollTo(0, y)
-    }
+    lockBody()
+    return unlockBody
   }, [active])
 }
 
@@ -102,6 +154,7 @@ export function Sheet({
         flexDirection: 'column',
         justifyContent: 'flex-end',
         alignItems: 'center',
+        paddingRight: 'var(--scroll-gutter, 0px)',
       }}
     >
       <div
@@ -206,6 +259,7 @@ export function ConfirmDialog({
         display: 'grid',
         placeItems: 'center',
         padding: 'var(--gap-xxxl)',
+        paddingRight: 'calc(var(--gap-xxxl) + var(--scroll-gutter, 0px))',
       }}
     >
       <div
