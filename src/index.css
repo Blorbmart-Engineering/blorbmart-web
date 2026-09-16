@@ -371,6 +371,21 @@ img {
 
 @keyframes blorb-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
+/* The splash mark writes itself, as it does on www: the pen traces the
+   outline, then the fill comes in behind it. --mark-t shifts both onto the
+   clock of the first splash of the page load (see SplashVisual). */
+@keyframes blorb-mark-trace { to { stroke-dashoffset: 0; } }
+@keyframes blorb-mark-fill  { to { fill-opacity: 1; } }
+
+.blorb-mark-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  fill-opacity: 0;
+  animation:
+    blorb-mark-trace 950ms cubic-bezier(0.42, 0, 0.58, 1) calc(100ms + var(--mark-t, 0ms)) forwards,
+    blorb-mark-fill 450ms ease-out calc(650ms + var(--mark-t, 0ms)) forwards;
+}
+
 .blorb-fade-slide-in {
   animation: blorb-fade-slide-in var(--dur-slow) var(--ease-emphasized) both;
 }
@@ -409,6 +424,9 @@ img {
     transition-duration: 0.01ms !important;
   }
   .press:active { transform: none; }
+  /* The shortened duration alone would still hold the mark invisible for
+     its delay, then snap it in. */
+  .blorb-mark-draw { animation: none; stroke-dashoffset: 0; fill-opacity: 1; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

@@ -4,15 +4,20 @@
    Run with `npm run icons`. Checked-in output lives in public/icons, so a
    normal build does not need sharp.
 
+   Every icon is the mark in white on the brand blue. The artwork itself is
+   blue, and the first version of this script put it on a blue ground as-is:
+   the installed app was a plain blue square. Only the artwork's shape is
+   used here, so it cannot blend into its own tile again.
+
    Three families, because the platforms genuinely differ:
 
-   * `any` icons are the plain artwork, used in the Android launcher's legacy
-     path and in the browser tab.
-   * `maskable` icons are the same artwork inset into a safe zone on a solid
-     brand ground, because Android crops an adaptive icon to whatever shape
-     the launcher uses — a full-bleed logo loses its edges.
-   * `apple-touch-icon` is flattened onto white. iOS composites nothing: a
-     transparent PNG there renders with a black background.
+   * `any` icons are a rounded brand tile with transparent corners, used in
+     the browser tab, the desktop install and Android's legacy path.
+   * `maskable` icons are full-bleed brand with the mark inside the safe
+     zone, because Android crops an adaptive icon to whatever shape the
+     launcher uses — a mark near the edge loses its edges.
+   * `apple-touch-icon` is full-bleed too. iOS rounds the corners itself and
+     composites nothing: a transparent PNG there renders on black.
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -34,40 +39,61 @@ const MASKABLE_SIZES = [192, 512]
 /** iOS reads 180 for the Home Screen; the rest cover older devices. */
 const APPLE_SIZES = [120, 152, 167, 180]
 
-async function any(size) {
-  return sharp(source)
-    .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+/**
+ * The mark alone, in white, `height` pixels tall.
+ *
+ * The source canvas carries uneven padding (the mark sits low and to one
+ * side), so it is trimmed to the ink and then centred by the caller, rather
+ * than inheriting the artwork's offset.
+ */
+async function whiteMark(height) {
+  const alpha = await sharp(source)
+    .trim()
+    .resize({ height, fit: 'inside' })
+    .ensureAlpha()
+    .extractChannel(3)
+    .png()
+    .toBuffer()
+  const { width } = await sharp(alpha).metadata()
+  const art = await sharp({ create: { width, height, channels: 3, background: WHITE } })
+    .joinChannel(alpha)
+    .png()
+    .toBuffer()
+  return { art, width, height }
+}
+
+/** A brand ground of `size` with the mark centred at `scale` of its height. */
+async function tile(size, scale, radius) {
+  const mark = await whiteMark(Math.round(size * scale))
+  const ground =
+    radius > 0
+      ? Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">` +
+            `<rect width="${size}" height="${size}" rx="${size * radius}" fill="#1F77F1"/></svg>`,
+        )
+      : { create: { width: size, height: size, channels: 4, background: BRAND } }
+  return sharp(ground)
+    .composite([
+      {
+        input: mark.art,
+        top: Math.round((size - mark.height) / 2),
+        left: Math.round((size - mark.width) / 2),
+      },
+    ])
     .png({ compressionLevel: 9 })
     .toBuffer()
 }
+
+/** Rounded tile, transparent corners. */
+const any = (size) => tile(size, size <= 32 ? 0.66 : 0.56, 0.22)
 
 /**
  * Maskable icons must keep their meaning inside a circle of 80% of the
- * canvas, so the artwork is drawn at 62% and centred on the brand ground.
+ * canvas. At 46% of the height the mark's bounding box stays well inside it.
  */
-async function maskable(size) {
-  const inner = Math.round(size * 0.62)
-  const art = await sharp(source).resize(inner, inner, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer()
-  const offset = Math.round((size - inner) / 2)
-  return sharp({
-    create: { width: size, height: size, channels: 4, background: BRAND },
-  })
-    .composite([{ input: art, top: offset, left: offset }])
-    .png({ compressionLevel: 9 })
-    .toBuffer()
-}
+const maskable = (size) => tile(size, 0.46, 0)
 
-async function apple(size) {
-  const inner = Math.round(size * 0.82)
-  const art = await sharp(source).resize(inner, inner, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer()
-  const offset = Math.round((size - inner) / 2)
-  return sharp({
-    create: { width: size, height: size, channels: 4, background: WHITE },
-  })
-    .composite([{ input: art, top: offset, left: offset }])
-    .png({ compressionLevel: 9 })
-    .toBuffer()
-}
+const apple = (size) => tile(size, 0.54, 0)
 
 async function main() {
   await mkdir(outDir, { recursive: true })
