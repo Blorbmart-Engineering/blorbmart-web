@@ -53,6 +53,7 @@ export default function BillFormScreen() {
   const [service, setService] = useState<BillService | null>(null)
   const [missing, setMissing] = useState(false)
   const [bundles, setBundles] = useState<BillVariation[] | null>(null)
+  const [bundleError, setBundleError] = useState<string | null>(null)
   const [saved, setSaved] = useState<Beneficiary[]>([])
 
   const [phone, setPhone] = useState('')
@@ -94,18 +95,35 @@ export default function BillFormScreen() {
   useEffect(() => {
     if (!service || !needsVariation(service)) return
     setBundles(null)
+    setBundleError(null)
     void variations(service.id)
       .then(setBundles)
-      .catch(() => {
+      .catch((e) => {
         setBundles([])
-        showToast(`Could not load bundles for ${service.name}.`, 'danger')
+        // The backend says why when it knows why — a biller the aggregator
+        // has not switched on for us reads as "not available yet", which is
+        // the truth and is more use than "could not load".
+        const message = apiErrorMessage(e, `Could not load bundles for ${service.name}.`)
+        setBundleError(message)
+        showToast(message, 'danger')
       })
   }, [service])
 
+  /** The value being bought: the bundle price, or the amount typed in. */
   const payable = useMemo(() => {
     if (variation) return variation.amount
     return Number(amount.replace(/\D/g, '')) || 0
   }, [variation, amount])
+
+  /**
+   * The transaction fee, and what will actually leave the wallet.
+   *
+   * Charged on top of the value rather than taken out of it, so ₦500 of
+   * airtime is still ₦500 of airtime. Nothing is added to an empty form — a
+   * button reading "Pay ₦10" before anything has been chosen would be a lie.
+   */
+  const fee = service && payable > 0 ? service.fee : 0
+  const total = payable + fee
 
   /** Confirms a meter or smartcard belongs to a real customer. */
   const runVerify = useCallback(async () => {
@@ -166,8 +184,8 @@ export default function BillFormScreen() {
   const pay = async () => {
     if (!service || !ready || paying) return
 
-    if (method === 'wallet' && walletBalance < payable) {
-      showToast(`Your wallet is short by ${money(payable - walletBalance)}.`, 'danger')
+    if (method === 'wallet' && walletBalance < total) {
+      showToast(`Your wallet is short by ${money(total - walletBalance)}.`, 'danger')
       return
     }
 
@@ -399,8 +417,11 @@ export default function BillFormScreen() {
               </div>
             ) : bundles.length === 0 ? (
               <EmptyState
-                title="No bundles available"
-                message="This operator has no plans listed right now. Try again shortly."
+                title={bundleError ? 'Not available yet' : 'No bundles available'}
+                message={
+                  bundleError ??
+                  'This operator has no plans listed right now. Try again shortly.'
+                }
                 compact
               />
             ) : (
@@ -485,6 +506,34 @@ export default function BillFormScreen() {
           </Field>
         )}
 
+        {/* ── What this costs ────────────────────────────────────────────
+            Shown the moment there is a price, and before the payment method,
+            so the fee is something the customer reads on the way in rather
+            than discovers in their wallet ledger afterwards. */}
+        {fee > 0 && (
+          <div
+            style={{
+              marginTop: 'var(--gap-xl)',
+              padding: 'var(--gap-md) var(--gap-lg)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-line)',
+            }}
+          >
+            <Line label={service.name} value={money(payable)} />
+            <Line label="Transaction fee" value={money(fee)} />
+            <div
+              style={{
+                marginTop: 'var(--gap-sm)',
+                paddingTop: 'var(--gap-sm)',
+                borderTop: '1px solid var(--color-line)',
+              }}
+            >
+              <Line label="Total" value={money(total)} strong />
+            </div>
+          </div>
+        )}
+
         {/* ── Payment ────────────────────────────────────────────────── */}
         <div className="t-overline" style={{ margin: 'var(--gap-xl) 0 var(--gap-sm)' }}>
           Pay with
@@ -495,10 +544,10 @@ export default function BillFormScreen() {
           onSelect={() => setMethod('wallet')}
           title="Blorbmart wallet"
           subtitle={`Balance ${money(walletBalance)}`}
-          disabled={payable > 0 && walletBalance < payable}
+          disabled={total > 0 && walletBalance < total}
           disabledReason={
-            payable > 0 && walletBalance < payable
-              ? `Short by ${money(payable - walletBalance)}`
+            total > 0 && walletBalance < total
+              ? `Short by ${money(total - walletBalance)}`
               : undefined
           }
           icon={<Wallet size={20} aria-hidden />}
@@ -536,7 +585,13 @@ export default function BillFormScreen() {
 
       <StickyFooter>
         <Button
-          label={payable > 0 ? `Pay ${money(payable)}` : 'Enter an amount'}
+          label={
+            total > 0
+              ? `Pay ${money(total)}`
+              : needsVariation(service)
+                ? 'Choose a bundle'
+                : 'Enter an amount'
+          }
           disabled={!ready}
           busy={paying}
           glow
@@ -554,6 +609,36 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 'var(--radius-md)',
   background: 'var(--color-surface)',
   border: '1px solid var(--color-line-strong)',
+}
+
+/** One row of the cost breakdown. */
+function Line({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string
+  value: string
+  strong?: boolean
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        gap: 'var(--gap-md)',
+        padding: '3px 0',
+      }}
+    >
+      <span className={strong ? 't-label' : 't-body-sm'} style={{ minWidth: 0 }}>
+        {label}
+      </span>
+      <span className={strong ? 't-price-sm' : 't-body-sm'} style={{ flexShrink: 0 }}>
+        {value}
+      </span>
+    </div>
+  )
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

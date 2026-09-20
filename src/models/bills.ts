@@ -51,6 +51,12 @@ export interface BillService {
   min: number
   max: number
   cashbackPercent: number
+  /**
+   * The transaction fee added on top of this purchase, in naira. Set in the
+   * admin dashboard and sent with the catalogue, so the form can show the
+   * real total before anyone taps Pay rather than after.
+   */
+  fee: number
 }
 
 export function billServiceFromMap(m: Record<string, unknown>): BillService {
@@ -65,6 +71,7 @@ export function billServiceFromMap(m: Record<string, unknown>): BillService {
     min: asDouble(m.min),
     max: asDouble(m.max),
     cashbackPercent: asDouble(m.cashbackPercent),
+    fee: asDouble(m.fee),
   }
 }
 
@@ -174,7 +181,11 @@ export interface BillPayment {
   serviceKey: string
   serviceName: string
   category: string
+  /** The value bought — the airtime or the bundle, before the fee. */
   amount: number
+  fee: number
+  /** What was actually taken from the wallet or the card: amount + fee. */
+  total: number
   status: BillStatus
   target: string
   variationName: string
@@ -191,12 +202,17 @@ export interface BillPayment {
 
 export function billPaymentFromMap(m: Record<string, unknown>): BillPayment {
   const phone = asString(m.phone)
+  const amount = asDouble(m.amount)
   return {
     id: asString(m.id),
     serviceKey: asString(m.serviceKey),
     serviceName: asString(m.serviceName, 'Bill'),
     category: asString(m.category),
-    amount: asDouble(m.amount),
+    amount,
+    fee: asDouble(m.fee),
+    // Purchases made before fees existed carry no total; back then the value
+    // was the whole charge.
+    total: asDouble(m.totalAmount) || amount,
     status: billStatusFrom(asString(m.status)),
     target: phone || asString(m.accountNumber),
     variationName: asString(m.variationName),

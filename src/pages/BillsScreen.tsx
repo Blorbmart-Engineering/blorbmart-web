@@ -7,7 +7,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ChevronRight,
   GraduationCap,
@@ -52,8 +52,27 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
 
   const [data, setData] = useState<BillCatalog | null>(null)
   const [recent, setRecent] = useState<BillPayment[]>([])
-  const [category, setCategory] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  /**
+   * The chosen tab lives in the URL rather than in component state.
+   *
+   * Going to a biller and coming back unmounts this screen, so state here is
+   * lost and the tab reset to the first one — somebody picking a data plan,
+   * choosing the wrong network and tapping back landed on Airtime and had to
+   * find Data again. The history entry remembers it instead, and `replace`
+   * keeps flicking between tabs out of the back stack.
+   */
+  const [params, setParams] = useSearchParams()
+  const category = params.get('c')
+  const setCategory = useCallback(
+    (id: string) => {
+      const next = new URLSearchParams(params)
+      next.set('c', id)
+      setParams(next, { replace: true })
+    },
+    [params, setParams],
+  )
 
   const load = useCallback(
     async (refresh = false) => {
@@ -61,7 +80,6 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
       try {
         const result = await catalog(refresh)
         setData(result)
-        setCategory((current) => current ?? result.categories[0]?.id ?? null)
       } catch {
         setError('Could not load billers. Pull down to retry.')
       }
@@ -74,7 +92,12 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
     void load()
   }, [load])
 
-  const services = data && category ? servicesInCategory(data, category) : []
+  // A tab the backend no longer offers — a category the aggregator has since
+  // switched off, or an old link — falls back to the first one rather than
+  // showing an empty screen.
+  const active =
+    data?.categories.find((c) => c.id === category)?.id ?? data?.categories[0]?.id ?? null
+  const services = data && active ? servicesInCategory(data, active) : []
 
   return (
     <>
@@ -150,7 +173,7 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
               <div style={{ paddingBottom: 'var(--gap-lg)' }}>
                 <ChipRail
                   options={data.categories.map((c) => c.label)}
-                  selected={data.categories.find((c) => c.id === category)?.label ?? ''}
+                  selected={data.categories.find((c) => c.id === active)?.label ?? ''}
                   onSelect={(label) => {
                     const found = data.categories.find((c) => c.label === label)
                     if (found) setCategory(found.id)
@@ -179,7 +202,7 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
                   <FadeSlideIn key={service.id} delay={staggerFor(i, 6)}>
                     <ServiceTile
                       service={service}
-                      category={category ?? ''}
+                      category={active ?? ''}
                       onClick={() => navigate(`/bills/pay/${encodeURIComponent(service.id)}`)}
                     />
                   </FadeSlideIn>
@@ -227,7 +250,7 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
                     </span>
                     <span style={{ textAlign: 'right', flexShrink: 0 }}>
                       <span className="t-price" style={{ display: 'block' }}>
-                        {money(payment.amount)}
+                        {money(payment.total)}
                       </span>
                       <span
                         className="t-caption-sm"
