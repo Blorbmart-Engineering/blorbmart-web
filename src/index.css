@@ -617,3 +617,52 @@ img {
   border-left: 3px solid #A86A12; background: rgba(168, 106, 18, 0.07);
   padding: 9px 11px; font-size: 10.5px; color: #7A4F10; line-height: 1.5;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Printing a ticket.
+
+   A phone can die at the gate, so a ticket has to be able to leave the
+   phone. There is no PDF library here and no server-rendered ticket
+   document: the browser already knows how to turn a page into a PDF, so
+   printing IS the download, and "Save as PDF" is a destination in every
+   print dialog on every platform.
+
+   Everything but the ticket is taken off the page. The stub already has
+   its own shadow, colours and a torn edge, and all three have to survive
+   a print engine that strips backgrounds by default.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media print {
+  @page { margin: 12mm; }
+
+  html, body {
+    background: #fff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide by visibility rather than display: an ancestor set to display:none
+     takes the ticket inside it with it, and the ticket is nested several
+     layouts deep. */
+  body * { visibility: hidden; }
+  .blorb-ticket, .blorb-ticket * { visibility: visible; }
+
+  .blorb-ticket {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+    /* Without this the header photograph, the violet wash and the status
+       colours all print as white paper. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    box-shadow: none !important;
+    border: 1px solid #D7DEEA;
+    max-width: 340px !important;
+    break-inside: avoid;
+  }
+
+  /* The notches are punched in the page colour, which on paper is white. */
+  .blorb-ticket span[style*="border-radius: 50%"] {
+    background: #fff !important;
+  }
+}
