@@ -200,9 +200,13 @@ export default function App() {
 
             {/* ── Bills ──────────────────────────────────── */}
             <Route path="/bills" element={<Shell><BillsScreen /></Shell>} />
+            {/* Pushed, like /cart and /checkout and for the same reason: the
+                shell's fixed nav bar sits above a sticky footer, so inside it
+                the Pay button was covered by the tab bar and a tap on it
+                landed on a tab. There was no way to buy airtime on the web. */}
             <Route
               path="/bills/pay/:serviceKey"
-              element={<Protected><Shell><BillFormScreen /></Shell></Protected>}
+              element={<Protected><BillFormScreen /></Protected>}
             />
             <Route
               path="/bills/receipt/:billId"

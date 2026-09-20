@@ -53,11 +53,13 @@ function listOf<T>(raw: unknown, parse: (m: Record<string, unknown>) => T): T[] 
 }
 
 /**
- * The catalogue changes rarely, so it is cached for the session. Bundle prices
- * change often, so those are cached for minutes, not hours.
+ * The catalogue is cached for minutes rather than the session: it now carries
+ * the transaction fee on each biller and leaves out categories the aggregator
+ * cannot sell, and both of those change without a deploy. A half-hour cache
+ * would quote a fee the backend has stopped charging.
  */
 export async function catalog(refresh = false): Promise<BillCatalog> {
-  const fresh = catalogAt > 0 && Date.now() - catalogAt < 30 * 60_000
+  const fresh = catalogAt > 0 && Date.now() - catalogAt < 10 * 60_000
   if (!refresh && fresh && catalogCache) return catalogCache
 
   const data = await Api.get('/api/bills/catalog', { auth: false })

@@ -148,7 +148,7 @@ export default function BillReceiptScreen() {
               {BILL_STATUS_LABELS[payment.status]}
             </h1>
             <p className="t-price-lg" style={{ margin: 0 }}>
-              {money(payment.amount)}
+              {money(payment.total)}
             </p>
             {pending && (
               <p className="t-body-sm" style={{ margin: 'var(--gap-sm) 0 0' }}>
@@ -219,7 +219,16 @@ export default function BillReceiptScreen() {
             <div style={{ margin: 'var(--gap-sm) 0' }}>
               <DashedDivider />
             </div>
-            <SummaryRow label="Total" value={money(payment.amount)} emphasise />
+            {/* The fee is itemised rather than folded into the total: a
+                receipt that quotes a round ₦500 for a ₦510 charge is the
+                first thing a customer queries. */}
+            {payment.fee > 0 && (
+              <>
+                <SummaryRow label={payment.serviceName} value={money(payment.amount)} />
+                <SummaryRow label="Transaction fee" value={money(payment.fee)} />
+              </>
+            )}
+            <SummaryRow label="Total" value={money(payment.total)} emphasise />
           </Card>
         </FadeSlideIn>
 

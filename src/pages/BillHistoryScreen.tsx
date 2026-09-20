@@ -94,7 +94,7 @@ export default function BillHistoryScreen() {
                 </span>
                 <span style={{ textAlign: 'right', flexShrink: 0 }}>
                   <span className="t-price" style={{ display: 'block' }}>
-                    {money(payment.amount)}
+                    {money(payment.total)}
                   </span>
                   <span
                     className="t-caption-sm"
