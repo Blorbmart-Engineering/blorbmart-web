@@ -15,7 +15,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { Ticket as TicketIcon } from 'lucide-react'
+import { Download, Share2, Ticket as TicketIcon } from 'lucide-react'
+
+
 import { cachedEvent, getTicket, myTickets } from '../data/events'
 import {
   clockTime,
@@ -29,9 +31,10 @@ import {
   ticketIsUsable,
   type EventTicket,
 } from '../models/events'
+import { Button } from '../ui/Button'
 import { EmptyState, Skeleton } from '../ui/kit'
 import { FadeSlideIn, PressScale, staggerFor } from '../ui/motion'
-import { AppBar, ScreenBody } from '../ui/Screen'
+import { AppBar, ScreenBody, showToast } from '../ui/Screen'
 import { SmartImage } from '../ui/SmartImage'
 
 /* ── List ──────────────────────────────────────────────────────────────── */
@@ -164,6 +167,7 @@ export function TicketScreen() {
   const navigate = useNavigate()
   const [ticket, setTicket] = useState<EventTicket | null | undefined>(undefined)
   const [qr, setQr] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     getTicket(ticketId).then(setTicket)
@@ -182,6 +186,42 @@ export function TicketScreen() {
       .then(setQr)
       .catch(() => setQr(null))
   }, [ticket])
+
+  /**
+   * Keeps a copy that survives a flat battery at the gate.
+   *
+   * Printing is the download. There is no PDF library in this bundle and the
+   * backend renders receipts as HTML, not PDF — so a fetch-and-save-as-.pdf
+   * writes a file that is not a PDF and will not open. Every print dialog on
+   * every platform offers "Save as PDF" as a destination, and the print
+   * stylesheet in index.css puts the ticket alone on the page.
+   */
+  const download = () => {
+    setDownloading(true)
+    // Let the button paint its busy state before the dialog blocks the thread.
+    requestAnimationFrame(() => {
+      try {
+        window.print()
+      } finally {
+        setDownloading(false)
+      }
+    })
+  }
+
+  const share = async () => {
+    if (!ticket) return
+    const text = `${ticket.eventTitle || 'Blorbmart ticket'} · ${ticket.reference}`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Blorbmart ticket', text })
+      } else {
+        await navigator.clipboard.writeText(text)
+        showToast('Ticket details copied.', 'success')
+      }
+    } catch {
+      /* the guest dismissed the share sheet */
+    }
+  }
 
   if (ticket === undefined) {
     return (
@@ -216,6 +256,31 @@ export function TicketScreen() {
         <FadeSlideIn>
           <TicketStub ticket={ticket} qr={qr} />
         </FadeSlideIn>
+
+        {/* The one moment this is wanted is before leaving the house, on a
+            connection you are about to lose. It belongs under the ticket,
+            not behind a menu. */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 'var(--gap-md)',
+            maxWidth: 380,
+            margin: 'var(--gap-xl) auto 0',
+          }}
+        >
+          <Button
+            label="Share"
+            kind="outline"
+            icon={<Share2 size={17} aria-hidden />}
+            onClick={() => void share()}
+          />
+          <Button
+            label="Save PDF"
+            busy={downloading}
+            icon={<Download size={17} aria-hidden />}
+            onClick={download}
+          />
+        </div>
       </ScreenBody>
     </>
   )
