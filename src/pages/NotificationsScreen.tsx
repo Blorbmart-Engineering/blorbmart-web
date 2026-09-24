@@ -23,7 +23,7 @@ import { asDate, asString, timeAgo } from '../lib/format'
 import { canPromptForPush, isStandalone, requestPush } from '../lib/push'
 import { isSignedIn, useSessionStore } from '../store/sessionStore'
 import { Button, IconButton } from '../ui/Button'
-import { EmptyState, Skeleton } from '../ui/kit'
+import { ChipRail, EmptyState, Skeleton } from '../ui/kit'
 import { FadeSlideIn, PressScale, staggerFor } from '../ui/motion'
 import { AppBar, ScreenBody, showToast } from '../ui/Screen'
 import { isIosSafari } from '../hooks/useInstallPrompt'
@@ -34,7 +34,40 @@ interface Note {
   body: string
   route: string
   status: string
+  type: string
   at: Date | null
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+
+const TABS = ['All', 'Activity', 'Promotions', 'Updates'] as const
+type Tab = (typeof TABS)[number]
+
+/**
+ * Which tab a notification belongs on, from the `type` the backend wrote.
+ *
+ *   Activity    something that happened to this customer's own money or
+ *               orders: orders, bills, wallet, tickets, referral bonuses.
+ *   Promotions  things sent to many people at once: broadcasts, offers.
+ *   Updates     everything else, such as maintenance and account notices.
+ *
+ * Kept in step with notifications_screen.dart.
+ */
+const ACTIVITY = /^(order|delivery|bill|wallet|payment|refund|deposit|withdrawal|ticket|event_ticket|event_broadcast|referral|receipt|debit|credit|reversal)/
+const PROMOTIONS = /^(broadcast|campus_broadcast|promo|offer|announcement|marketing|deal)/
+
+function tabFor(type: string): Exclude<Tab, 'All'> {
+  const t = type.toLowerCase()
+  if (PROMOTIONS.test(t)) return 'Promotions'
+  if (ACTIVITY.test(t)) return 'Activity'
+  return 'Updates'
+}
+
+const EMPTY_COPY: Record<Tab, string> = {
+  All: 'Order updates, payment confirmations and offers land here.',
+  Activity: 'Orders, payments, bills and tickets will show up here.',
+  Promotions: 'Deals and announcements from Blorbmart will show up here.',
+  Updates: 'Account and service notices will show up here.',
 }
 
 export default function NotificationsScreen() {
@@ -42,6 +75,7 @@ export default function NotificationsScreen() {
   const signedIn = useSessionStore(isSignedIn)
   const [notes, setNotes] = useState<Note[] | null>(null)
   const [canAsk, setCanAsk] = useState(false)
+  const [tab, setTab] = useState<Tab>('All')
 
   useEffect(() => {
     void canPromptForPush().then(setCanAsk)
@@ -70,6 +104,7 @@ export default function NotificationsScreen() {
               body: asString(data.body ?? data.message),
               route: asString(data.route ?? data.link),
               status: asString(data.status, 'read'),
+              type: asString(data.type, 'general'),
               at: asDate(data.createdAt),
             }
           }),
@@ -79,6 +114,13 @@ export default function NotificationsScreen() {
   }, [signedIn])
 
   const unread = (notes ?? []).filter((n) => n.status === 'unread')
+  const shown = (notes ?? []).filter((n) => tab === 'All' || tabFor(n.type) === tab)
+
+  /** "Promotions · 2" when a tab has unread items, so they are not missed. */
+  const unreadIn = (t: Tab) =>
+    unread.filter((n) => t === 'All' || tabFor(n.type) === t).length
+  const labelFor = (t: Tab) => (unreadIn(t) > 0 ? `${t} · ${unreadIn(t)}` : t)
+  const labels = TABS.map(labelFor)
 
   const markAllRead = async () => {
     const uid = auth.currentUser?.uid
@@ -184,6 +226,16 @@ export default function NotificationsScreen() {
           </p>
         )}
 
+        {notes !== null && notes.length > 0 && (
+          <div style={{ marginBottom: 'var(--gap-lg)' }}>
+            <ChipRail
+              options={labels}
+              selected={labelFor(tab)}
+              onSelect={(label) => setTab(TABS[labels.indexOf(label)] ?? 'All')}
+            />
+          </div>
+        )}
+
         {notes === null ? (
           [0, 1, 2, 3].map((i) => (
             <Skeleton
@@ -193,14 +245,14 @@ export default function NotificationsScreen() {
               style={{ marginBottom: 'var(--gap-sm)' }}
             />
           ))
-        ) : notes.length === 0 ? (
+        ) : shown.length === 0 ? (
           <EmptyState
-            title="Nothing yet"
-            message="Order updates, payment confirmations and offers land here."
+            title={tab === 'All' ? 'Nothing yet' : `No ${tab.toLowerCase()} yet`}
+            message={EMPTY_COPY[tab]}
             icon={<BellOff size={30} aria-hidden />}
           />
         ) : (
-          notes.map((note, i) => (
+          shown.map((note, i) => (
             <FadeSlideIn key={note.id} delay={staggerFor(i, 6)}>
               <PressScale
                 scale={0.99}

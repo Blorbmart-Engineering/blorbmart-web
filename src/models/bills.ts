@@ -91,6 +91,12 @@ export interface BillVariation {
   code: string
   name: string
   amount: number
+  /**
+   * How long a data plan lasts, as the backend shelved it: "Daily",
+   * "Weekly", "Monthly", "2 months+" or "Other". Empty for TV and
+   * education packages, which are not sorted by validity.
+   */
+  periodLabel: string
 }
 
 export function billVariationFromMap(m: Record<string, unknown>): BillVariation {
@@ -98,8 +104,30 @@ export function billVariationFromMap(m: Record<string, unknown>): BillVariation 
     code: asString(m.code),
     name: asString(m.name),
     amount: asDouble(m.amount),
+    periodLabel: asString(m.periodLabel),
   }
 }
+
+/** The order the period tabs appear in. */
+const PERIOD_ORDER = ['Daily', 'Weekly', 'Monthly', '2 months+', 'Other']
+
+export const ALL_PLANS = 'All'
+
+/**
+ * The tabs worth showing over a bundle list: "All" plus every period that
+ * has at least one plan. Empty when there is nothing to split, so a list of
+ * TV packages, or plans that are all monthly, shows no tabs at all.
+ */
+export function bundlePeriods(bundles: BillVariation[]): string[] {
+  const present = new Set(bundles.map((b) => b.periodLabel).filter(Boolean))
+  if (present.size < 2) return []
+  const ordered = PERIOD_ORDER.filter((p) => present.has(p))
+  const extra = [...present].filter((p) => !PERIOD_ORDER.includes(p))
+  return [ALL_PLANS, ...ordered, ...extra]
+}
+
+export const bundlesInPeriod = (bundles: BillVariation[], period: string) =>
+  period === ALL_PLANS ? bundles : bundles.filter((b) => b.periodLabel === period)
 
 /**
  * Bundles are usually named "1GB — 30 days"; split so the size can lead

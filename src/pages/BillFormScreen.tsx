@@ -32,11 +32,14 @@ import {
   variationHeadline,
   type Beneficiary,
   type BillService,
+  ALL_PLANS,
+  bundlePeriods,
+  bundlesInPeriod,
   type BillVariation,
 } from '../models/bills'
 import { verifyCustomer } from '../data/bills'
 import { Button } from '../ui/Button'
-import { EmptyState, Skeleton } from '../ui/kit'
+import { ChipRail, EmptyState, Skeleton } from '../ui/kit'
 import { PressScale } from '../ui/motion'
 import { AppBar, ScreenBody, StickyFooter, showToast } from '../ui/Screen'
 import { PaymentMethodTile, type PayMethod } from '../components/PaymentMethodTile'
@@ -60,6 +63,7 @@ export default function BillFormScreen() {
   const [account, setAccount] = useState('')
   const [amount, setAmount] = useState('')
   const [variation, setVariation] = useState<BillVariation | null>(null)
+  const [period, setPeriod] = useState(ALL_PLANS)
   const [meterType, setMeterType] = useState('prepaid')
 
   const [verifying, setVerifying] = useState(false)
@@ -96,6 +100,7 @@ export default function BillFormScreen() {
     if (!service || !needsVariation(service)) return
     setBundles(null)
     setBundleError(null)
+    setPeriod(ALL_PLANS)
     void variations(service.id)
       .then(setBundles)
       .catch((e) => {
@@ -425,8 +430,18 @@ export default function BillFormScreen() {
                 compact
               />
             ) : (
+              <>
+              {bundlePeriods(bundles).length > 0 && (
+                <div style={{ marginBottom: 'var(--gap-md)' }}>
+                  <ChipRail
+                    options={bundlePeriods(bundles)}
+                    selected={period}
+                    onSelect={setPeriod}
+                  />
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {bundles.map((bundle) => {
+                {bundlesInPeriod(bundles, period).map((bundle) => {
                   const chosen = variation?.code === bundle.code
                   return (
                     <PressScale
@@ -460,6 +475,7 @@ export default function BillFormScreen() {
                   )
                 })}
               </div>
+              </>
             )}
           </Field>
         )}
