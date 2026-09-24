@@ -28,6 +28,7 @@ export function TransferAccountCard({ onFunded }: { onFunded?: () => void }) {
   const [busy, setBusy] = useState(false)
   const [checking, setChecking] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedOnce, setCopiedOnce] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [details, setDetails] = useState({ firstName: '', lastName: '', phone: '' })
 
@@ -69,6 +70,7 @@ export function TransferAccountCard({ onFunded }: { onFunded?: () => void }) {
     try {
       await navigator.clipboard.writeText(account.accountNumber)
       setCopied(true)
+      setCopiedOnce(true)
       showToast('Account number copied', 'success')
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -121,7 +123,7 @@ export function TransferAccountCard({ onFunded }: { onFunded?: () => void }) {
       </div>
 
       <div style={{ marginTop: 'var(--gap-lg)' }}>
-        {phase === 'loading' && <Skeleton height={74} radius="var(--radius-md)" />}
+        {phase === 'loading' && <Skeleton height={196} radius="var(--radius-lg)" />}
 
         {phase === 'error' && (
           <Button label="Try again" kind="soft" size="md" onClick={() => void open()} busy={busy} />
@@ -179,47 +181,80 @@ export function TransferAccountCard({ onFunded }: { onFunded?: () => void }) {
           <>
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--gap-md)',
-                padding: 'var(--gap-md) var(--gap-lg)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--color-surface-sunken)',
+                borderRadius: 'var(--radius-lg)',
+                background: 'var(--color-brand-softer)',
+                border: '1px solid var(--color-brand-soft)',
               }}
             >
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span className="t-caption clamp-1" style={{ display: 'block' }}>
-                  {account.bankName}
+              <DetailRow label="Bank" value={account.bankName} />
+              <RowDivider />
+              <div style={{ padding: 'var(--gap-md) var(--gap-lg)' }}>
+                <span className="t-overline" style={{ display: 'block' }}>
+                  Account number
                 </span>
-                <span
-                  className="t-price-lg"
-                  style={{ display: 'block', letterSpacing: '0.06em', fontSize: 24 }}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--gap-md)',
+                    marginTop: 6,
+                  }}
                 >
-                  {account.accountNumber}
-                </span>
-                <span className="t-caption clamp-1" style={{ display: 'block' }}>
-                  {account.accountName}
-                </span>
-              </span>
-              <Button
-                label={copied ? 'Copied' : 'Copy'}
-                kind={copied ? 'soft' : 'brand'}
-                size="sm"
-                expand={false}
-                icon={copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
-                onClick={() => void copy()}
-              />
+                  <span
+                    className="t-price-lg"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      // Fits beside the Copy button on a 360px phone.
+                      fontSize: 'clamp(20px, 6.2vw, 26px)',
+                      letterSpacing: '0.04em',
+                      fontVariantNumeric: 'tabular-nums',
+                      color: 'var(--color-ink-strong)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {groupDigits(account.accountNumber)}
+                  </span>
+                  <Button
+                    label={copied ? 'Copied' : 'Copy'}
+                    kind={copied ? 'soft' : 'brand'}
+                    size="sm"
+                    expand={false}
+                    icon={copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
+                    onClick={() => void copy()}
+                  />
+                </div>
+              </div>
+              <RowDivider />
+              <DetailRow label="Account name" value={account.accountName} />
             </div>
-            <p className="t-caption" style={{ margin: 'var(--gap-sm) 0 var(--gap-md)' }}>
-              Send any amount from your bank app. It usually shows up within a minute.
+
+            <p className="t-caption" style={{ margin: 'var(--gap-md) 0 0' }}>
+              Transfer any amount from your bank app. Your wallet is credited
+              automatically, usually within a minute.
             </p>
-            <Button
-              label="I've sent the money"
-              kind="outline"
-              size="md"
-              busy={checking}
-              onClick={() => void check()}
-            />
+
+            {/* Only offered once the customer has copied the number, so it
+                does not sit there asking to be pressed before any transfer. */}
+            {copiedOnce && (
+              <button
+                type="button"
+                onClick={() => void check()}
+                disabled={checking}
+                className="t-label"
+                style={{
+                  marginTop: 'var(--gap-sm)',
+                  padding: 0,
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--color-brand)',
+                  cursor: checking ? 'default' : 'pointer',
+                  opacity: checking ? 0.6 : 1,
+                }}
+              >
+                {checking ? 'Checking…' : 'Sent it? Check now'}
+              </button>
+            )}
           </>
         )}
 
@@ -230,6 +265,34 @@ export function TransferAccountCard({ onFunded }: { onFunded?: () => void }) {
         )}
       </div>
     </Card>
+  )
+}
+
+/** 0123456789 → "012 345 6789", the way people read account numbers aloud. */
+const groupDigits = (value: string) =>
+  value.length === 10 ? `${value.slice(0, 3)} ${value.slice(3, 6)} ${value.slice(6)}` : value
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ padding: 'var(--gap-md) var(--gap-lg)' }}>
+      <span className="t-overline" style={{ display: 'block' }}>
+        {label}
+      </span>
+      <span
+        className="t-h4 clamp-1"
+        style={{ display: 'block', marginTop: 4, color: 'var(--color-ink-strong)' }}
+      >
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function RowDivider() {
+  return (
+    <div
+      style={{ height: 1, marginInline: 'var(--gap-lg)', background: 'var(--color-brand-soft)' }}
+    />
   )
 }
 

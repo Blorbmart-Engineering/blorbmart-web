@@ -189,7 +189,7 @@ const transferAccountFrom = (data: Record<string, unknown>): TransferAccount | n
   return {
     accountNumber: asString(raw.accountNumber),
     accountName: asString(raw.accountName),
-    bankName: asString(raw.bankName, 'Titan Trust Bank'),
+    bankName: asString(raw.bankName, 'Paystack-Titan'),
   }
 }
 
