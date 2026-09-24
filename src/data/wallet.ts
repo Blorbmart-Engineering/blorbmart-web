@@ -55,6 +55,8 @@ export interface WalletEntry {
    * "awaiting" row is now something you can act on rather than a dead end.
    */
   authorizationUrl: string
+  /** `bank_transfer` for money sent to the customer's own account number. */
+  paymentMethod: string
 }
 
 export function walletEntryFromMap(m: Record<string, unknown>): WalletEntry {
@@ -69,6 +71,7 @@ export function walletEntryFromMap(m: Record<string, unknown>): WalletEntry {
     balanceAfter: asDouble(m.newBalance),
     at: asDate(m.timestamp ?? m.createdAt),
     authorizationUrl: asString(m.authorizationUrl, asString(metadata.authorizationUrl)),
+    paymentMethod: asString(m.paymentMethod),
   }
 }
 
@@ -107,7 +110,7 @@ export function entryStatusLabel(e: WalletEntry): string {
 export function entryTitle(e: WalletEntry): string {
   switch (e.type) {
     case 'deposit':
-      return 'Wallet top-up'
+      return e.paymentMethod === 'bank_transfer' ? 'Bank transfer' : 'Wallet top-up'
     case 'refund':
       return 'Refund'
     case 'debit':
@@ -166,6 +169,69 @@ export async function transactions(limit = 40): Promise<WalletEntry[]> {
     console.warn('[wallet] transactions failed', e)
     return []
   }
+}
+
+/* ── Bank transfer account ───────────────────────────────────────────── */
+
+/**
+ * The customer's own account number (a Paystack dedicated account at Titan).
+ * Money sent to it from any bank app lands in the wallet on its own.
+ */
+export interface TransferAccount {
+  accountNumber: string
+  accountName: string
+  bankName: string
+}
+
+const transferAccountFrom = (data: Record<string, unknown>): TransferAccount | null => {
+  const raw = data.account as Record<string, unknown> | null | undefined
+  if (!raw || !asString(raw.accountNumber)) return null
+  return {
+    accountNumber: asString(raw.accountNumber),
+    accountName: asString(raw.accountName),
+    bankName: asString(raw.bankName, 'Titan Trust Bank'),
+  }
+}
+
+/** Keyed by uid, so signing into another account never shows the last one's number. */
+let cachedAccount: { uid: string; account: TransferAccount } | null = null
+
+/** The account if the customer already has one; null if not yet opened. */
+export async function transferAccount(): Promise<TransferAccount | null> {
+  const uid = auth.currentUser?.uid
+  if (!uid) return null
+  if (cachedAccount?.uid === uid) return cachedAccount.account
+  const data = await Api.get('/api/wallet/virtual-account')
+  const account = transferAccountFrom(data)
+  if (account) cachedAccount = { uid, account }
+  return account
+}
+
+/**
+ * Opens the account, or returns the one already open. Name and phone are
+ * only needed when the backend answers PROFILE_INCOMPLETE.
+ */
+export async function openTransferAccount(details?: {
+  firstName?: string
+  lastName?: string
+  phone?: string
+}): Promise<TransferAccount> {
+  const data = await Api.post('/api/wallet/virtual-account', { body: details ?? {} })
+  const account = transferAccountFrom(data)
+  if (!account) throw new ApiError('We could not open your account number. Try again.')
+  const uid = auth.currentUser?.uid
+  if (uid) cachedAccount = { uid, account }
+  return account
+}
+
+/**
+ * "I've sent it": asks the backend to check Paystack for transfers the
+ * webhook has not delivered yet. Returns how much was credited just now.
+ */
+export async function checkForTransfer(): Promise<number> {
+  const data = await Api.post('/api/wallet/virtual-account/sync')
+  invalidateBalance()
+  return asDouble(data.amount)
 }
 
 /** Starts a Paystack top-up. Returns the authorization URL to open. */

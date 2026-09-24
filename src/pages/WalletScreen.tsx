@@ -35,6 +35,7 @@ import { EmptyState, SectionHeader, Skeleton } from '../ui/kit'
 import { FadeSlideIn, PressScale, staggerFor, useAnimatedNumber } from '../ui/motion'
 import { Sheet } from '../ui/Sheet'
 import { ScreenBody, showToast } from '../ui/Screen'
+import { TransferAccountCard } from '../components/TransferAccountCard'
 
 const PRESETS = [1000, 2000, 5000, 10000]
 
@@ -137,6 +138,11 @@ export default function WalletScreen() {
               onClick={() => navigate('/transactions')}
             />
           </div>
+        </div>
+
+        {/* ── Bank transfer account ──────────────────────────────────── */}
+        <div style={{ padding: 'var(--gap-xl) var(--gap-page) 0' }}>
+          <TransferAccountCard onFunded={() => void load(true)} />
         </div>
 
         {/* ── Unfinished top-ups ─────────────────────────────────────── */}
@@ -353,6 +359,23 @@ export function TopUpSheet({ open, onClose }: { open: boolean; onClose: () => vo
       <p className="t-body-sm" style={{ margin: '0 0 var(--gap-lg)' }}>
         Pay once, then orders and bills go through in a single tap.
       </p>
+
+      {open && <TransferAccountCard onFunded={onClose} />}
+
+      <div
+        className="t-overline"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--gap-md)',
+          margin: 'var(--gap-xl) 0 var(--gap-lg)',
+          color: 'var(--color-ink-faint)',
+        }}
+      >
+        <span style={{ flex: 1, height: 1, background: 'var(--color-line)' }} />
+        or pay with card
+        <span style={{ flex: 1, height: 1, background: 'var(--color-line)' }} />
+      </div>
 
       <div
         style={{
