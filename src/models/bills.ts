@@ -97,6 +97,12 @@ export interface BillVariation {
    * education packages, which are not sorted by validity.
    */
   periodLabel: string
+  /** The data allowance, "1.5GB", read out of the name. Empty when there is none. */
+  size: string
+  /** "30 days", "2 hours". Empty when the name does not say. */
+  validity: string
+  /** Anything else the provider says about the plan, such as its allowance. */
+  details: string
 }
 
 export function billVariationFromMap(m: Record<string, unknown>): BillVariation {
@@ -105,7 +111,16 @@ export function billVariationFromMap(m: Record<string, unknown>): BillVariation 
     name: asString(m.name),
     amount: asDouble(m.amount),
     periodLabel: asString(m.periodLabel),
+    size: asString(m.size) || sizeIn(`${asString(m.name)} ${asString(m.details)}`),
+    details: asString(m.details),
+    validity: asString(m.validity),
   }
+}
+
+/** "1.5GB" out of "Airtel Data Bundle - 1.5GB - 30 Days". */
+const sizeIn = (name: string) => {
+  const match = name.match(/(\d+(?:\.\d+)?)\s*(TB|GB|MB)\b/i)
+  return match ? `${match[1]}${match[2].toUpperCase()}` : ''
 }
 
 /** The order the period tabs appear in. */
@@ -133,11 +148,17 @@ export const bundlesInPeriod = (bundles: BillVariation[], period: string) =>
  * Bundles are usually named "1GB — 30 days"; split so the size can lead
  * visually and the validity sit underneath.
  */
+/**
+ * What leads a plan tile: the data allowance when the name has one. The name
+ * is the aggregator's, and some lead with the network ("Airtel Data Bundle -
+ * 1.5GB - 30 Days"), so its first chunk is not always the plan.
+ */
 export function variationHeadline(v: BillVariation): string {
-  return v.name.split(/\s*[-—–]\s*/)[0].trim()
+  return v.size || v.name.split(/\s*[-—–]\s*/)[0].trim()
 }
 
 export function variationDetail(v: BillVariation): string {
+  if (v.size) return v.validity || v.periodLabel
   const parts = v.name.split(/\s*[-—–]\s*/)
   return parts.length > 1 ? parts.slice(1).join(' · ').trim() : ''
 }

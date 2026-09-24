@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { BadgeCheck, LoaderCircle, Wallet } from 'lucide-react'
+import { BadgeCheck, Info, LoaderCircle, Wallet } from 'lucide-react'
 import { apiErrorMessage, warmUp } from '../lib/api'
 import { asString, guessNetwork, money, normaliseNgPhone } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
@@ -42,6 +42,7 @@ import { Button } from '../ui/Button'
 import { ChipRail, EmptyState, Skeleton } from '../ui/kit'
 import { PressScale } from '../ui/motion'
 import { AppBar, ScreenBody, StickyFooter, showToast } from '../ui/Screen'
+import { Sheet } from '../ui/Sheet'
 import { PaymentMethodTile, type PayMethod } from '../components/PaymentMethodTile'
 
 const METER_TYPES = [
@@ -64,6 +65,8 @@ export default function BillFormScreen() {
   const [amount, setAmount] = useState('')
   const [variation, setVariation] = useState<BillVariation | null>(null)
   const [period, setPeriod] = useState(ALL_PLANS)
+  /** The plan whose full details are open in a sheet. */
+  const [details, setDetails] = useState<BillVariation | null>(null)
   const [meterType, setMeterType] = useState('prepaid')
 
   const [verifying, setVerifying] = useState(false)
@@ -444,37 +447,81 @@ export default function BillFormScreen() {
                 {bundlesInPeriod(bundles, period).map((bundle) => {
                   const chosen = variation?.code === bundle.code
                   return (
-                    <PressScale
-                      key={bundle.code}
-                      scale={0.96}
-                      onClick={() => setVariation(bundle)}
-                      style={{
-                        display: 'block',
-                        padding: 'var(--gap-md)',
-                        borderRadius: 'var(--radius-md)',
-                        background: chosen ? 'var(--color-brand-soft)' : 'var(--color-surface)',
-                        border: `1px solid ${chosen ? 'var(--color-brand)' : 'var(--color-line)'}`,
-                        textAlign: 'left',
-                      }}
-                    >
-                      <span className="t-h4 clamp-1" style={{ display: 'block' }}>
-                        {variationHeadline(bundle)}
-                      </span>
-                      {variationDetail(bundle) && (
-                        <span className="t-caption-sm clamp-1" style={{ display: 'block' }}>
-                          {variationDetail(bundle)}
-                        </span>
-                      )}
-                      <span
-                        className="t-price-sm"
-                        style={{ display: 'block', marginTop: 6, color: 'var(--color-brand)' }}
+                    // The info button sits beside the tile, not inside it: a
+                    // button inside a button is not valid, and screen readers
+                    // would announce them as one.
+                    <div key={bundle.code} style={{ position: 'relative' }}>
+                      <PressScale
+                        scale={0.96}
+                        onClick={() => setVariation(bundle)}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          height: '100%',
+                          padding: 'var(--gap-md)',
+                          paddingRight: 36,
+                          borderRadius: 'var(--radius-md)',
+                          background: chosen ? 'var(--color-brand-soft)' : 'var(--color-surface)',
+                          border: `1px solid ${chosen ? 'var(--color-brand)' : 'var(--color-line)'}`,
+                          textAlign: 'left',
+                        }}
                       >
-                        {money(bundle.amount)}
-                      </span>
-                    </PressScale>
+                        <span className="t-h4 clamp-2" style={{ display: 'block' }}>
+                          {variationHeadline(bundle)}
+                        </span>
+                        {variationDetail(bundle) && (
+                          <span className="t-caption-sm clamp-2" style={{ display: 'block' }}>
+                            {variationDetail(bundle)}
+                          </span>
+                        )}
+                        <span
+                          className="t-price-sm"
+                          style={{ display: 'block', marginTop: 6, color: 'var(--color-brand)' }}
+                        >
+                          {money(bundle.amount)}
+                        </span>
+                      </PressScale>
+                      <button
+                        type="button"
+                        aria-label={`Details for ${bundle.name}`}
+                        onClick={() => setDetails(bundle)}
+                        style={{
+                          position: 'absolute',
+                          top: 4,
+                          right: 4,
+                          display: 'grid',
+                          placeItems: 'center',
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: 'transparent',
+                          color: 'var(--color-ink-muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Info size={17} aria-hidden />
+                      </button>
+                    </div>
                   )
                 })}
               </div>
+              {/* The chosen plan in full, so nobody pays for a name they
+                  could only read the start of. */}
+              {variation && (
+                <p
+                  className="t-body-sm"
+                  style={{
+                    margin: 'var(--gap-md) 0 0',
+                    padding: 'var(--gap-sm) var(--gap-md)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--color-brand-softer)',
+                    color: 'var(--color-brand-ink)',
+                  }}
+                >
+                  <strong>Selected:</strong> {variation.name}
+                </p>
+              )}
               </>
             )}
           </Field>
@@ -614,6 +661,52 @@ export default function BillFormScreen() {
           onClick={() => void pay()}
         />
       </StickyFooter>
+
+      {/* ── Plan details ─────────────────────────────────────────────── */}
+      <Sheet open={details !== null} onClose={() => setDetails(null)} title="Plan details">
+        {details && (
+          <>
+            <div
+              style={{
+                padding: 'var(--gap-lg)',
+                borderRadius: 'var(--radius-lg)',
+                background: 'var(--color-brand-softer)',
+                border: '1px solid var(--color-brand-soft)',
+                marginBottom: 'var(--gap-lg)',
+              }}
+            >
+              <div className="t-display-sm" style={{ color: 'var(--color-brand-ink)' }}>
+                {variationHeadline(details)}
+              </div>
+              {/* The aggregator's own name for the plan, never truncated. */}
+              <p className="t-body-sm" style={{ margin: 'var(--gap-xs) 0 0' }}>
+                {details.name}
+              </p>
+            </div>
+            <Line label="Network" value={service.name} />
+            {details.size && <Line label="Data" value={details.size} />}
+            {details.details && details.details !== details.size && (
+              <Line label="Includes" value={details.details} />
+            )}
+            {(details.validity || details.periodLabel) && (
+              <Line label="Valid for" value={details.validity || details.periodLabel} />
+            )}
+            <Line label="Price" value={money(details.amount)} />
+            {service.fee > 0 && <Line label="Transaction fee" value={money(service.fee)} />}
+            <Line label="You pay" value={money(details.amount + service.fee)} strong />
+            <div style={{ marginTop: 'var(--gap-xl)' }}>
+              <Button
+                label={variation?.code === details.code ? 'Selected' : 'Choose this plan'}
+                glow
+                onClick={() => {
+                  setVariation(details)
+                  setDetails(null)
+                }}
+              />
+            </div>
+          </>
+        )}
+      </Sheet>
     </>
   )
 }
