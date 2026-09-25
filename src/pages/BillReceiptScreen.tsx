@@ -108,10 +108,13 @@ export default function BillReceiptScreen() {
             ? Ban
             : Hourglass
 
+  // An exam purchase delivers a PIN (and serial), not a meter token.
+  const tokenNoun = payment.category === 'education' ? 'PIN' : 'token'
+
   const copyToken = async () => {
     try {
       await navigator.clipboard.writeText(payment.token)
-      showToast('Token copied.', 'success')
+      showToast(`${tokenNoun === 'PIN' ? 'PIN' : 'Token'} copied.`, 'success')
     } catch {
       showToast('Copy it by hand — your browser blocked the clipboard.', 'neutral')
     }
@@ -173,7 +176,7 @@ export default function BillReceiptScreen() {
               shadow="none"
               style={{ marginBottom: 'var(--gap-lg)' }}
             >
-              <div className="t-overline">Your token</div>
+              <div className="t-overline">Your {tokenNoun}</div>
               <div
                 className="t-price-lg"
                 style={{ margin: 'var(--gap-sm) 0', wordBreak: 'break-all', letterSpacing: 1 }}
@@ -186,7 +189,7 @@ export default function BillReceiptScreen() {
                 </div>
               )}
               <Button
-                label="Copy token"
+                label={`Copy ${tokenNoun}`}
                 kind="soft"
                 size="md"
                 icon={<Copy size={17} aria-hidden />}
