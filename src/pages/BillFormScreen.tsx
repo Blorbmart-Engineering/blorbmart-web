@@ -44,6 +44,7 @@ import { PressScale } from '../ui/motion'
 import { AppBar, ScreenBody, StickyFooter, showToast } from '../ui/Screen'
 import { Sheet } from '../ui/Sheet'
 import { PaymentMethodTile, type PayMethod } from '../components/PaymentMethodTile'
+import { useWalletPin } from '../components/WalletPinSheet'
 
 const METER_TYPES = [
   { id: 'prepaid', label: 'Prepaid' },
@@ -76,6 +77,7 @@ export default function BillFormScreen() {
   const [method, setMethod] = useState<PayMethod>('wallet')
   const [walletBalance, setWalletBalance] = useState(0)
   const [paying, setPaying] = useState(false)
+  const walletPin = useWalletPin()
   useBackFromPaystack(() => setPaying(false))
   const [error, setError] = useState<string | null>(null)
 
@@ -197,10 +199,18 @@ export default function BillFormScreen() {
       return
     }
 
+    // The wallet PIN comes first; backing out of it leaves nothing charged.
+    let pin: string | undefined
+    if (method === 'wallet') {
+      pin = (await walletPin.ask(money(total))) ?? undefined
+      if (!pin) return
+    }
+
     setPaying(true)
     setError(null)
     try {
       const result = await purchase({
+        pin,
         serviceKey: service.id,
         paymentMethod: method,
         amount: needsAmount(service) && !variation ? payable : undefined,
@@ -707,6 +717,8 @@ export default function BillFormScreen() {
           </>
         )}
       </Sheet>
+
+      {walletPin.sheet}
     </>
   )
 }

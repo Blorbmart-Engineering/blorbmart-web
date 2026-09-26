@@ -87,6 +87,7 @@ export async function purchaseTickets({
   holderName,
   holderPhone,
   idempotencyKey,
+  pin,
 }: {
   eventId: string
   ticketTypeId: string
@@ -95,6 +96,8 @@ export async function purchaseTickets({
   holderName?: string
   holderPhone?: string
   idempotencyKey?: string
+  /** The wallet PIN, on a wallet payment. */
+  pin?: string
 }): Promise<TicketOrder> {
   const data = await Api.post(`/api/events/${encodeURIComponent(eventId)}/purchase`, {
     body: {
@@ -103,6 +106,7 @@ export async function purchaseTickets({
       paymentMethod,
       ...(holderName ? { holderName } : {}),
       ...(holderPhone ? { holderPhone } : {}),
+      ...(pin ? { pin } : {}),
       idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
     },
   })

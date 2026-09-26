@@ -27,6 +27,7 @@ import { Card, DashedDivider, EmptyState, Skeleton, SummaryRow } from '../ui/kit
 import { AppBar, ScreenBody, StickyFooter } from '../ui/Screen'
 import { PaymentMethodTile, type PayMethod } from '../components/PaymentMethodTile'
 import { Field } from '../components/AddressSheet'
+import { useWalletPin } from '../components/WalletPinSheet'
 
 export default function TicketCheckoutScreen() {
   const { id = '' } = useParams()
@@ -45,6 +46,7 @@ export default function TicketCheckoutScreen() {
   const [walletBalance, setWalletBalance] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const walletPin = useWalletPin()
   useBackFromPaystack(() => setBusy(false))
 
   const idempotencyKey = useRef(newIdempotencyKey())
@@ -82,11 +84,20 @@ export default function TicketCheckoutScreen() {
 
   const submit = async () => {
     if (!tier || busy) return
+
+    // The wallet PIN comes first; backing out of it leaves nothing charged.
+    let pin: string | undefined
+    if (!free && method === 'wallet') {
+      pin = (await walletPin.ask(money(total))) ?? undefined
+      if (!pin) return
+    }
+
     setBusy(true)
     setError(null)
 
     try {
       const order = await purchaseTickets({
+        pin,
         eventId: id,
         ticketTypeId: tier.id,
         quantity,
@@ -276,6 +287,8 @@ export default function TicketCheckoutScreen() {
           onClick={() => void submit()}
         />
       </StickyFooter>
+
+      {walletPin.sheet}
     </>
   )
 }

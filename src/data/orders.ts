@@ -103,9 +103,10 @@ export function verifyPaystack(reference: string, orderId: string) {
   })
 }
 
-export function payWithWallet(orderId: string, promoCode?: string) {
+/** `pin` is the wallet PIN, which the backend checks before debiting. */
+export function payWithWallet(orderId: string, promoCode?: string, pin?: string) {
   return Api.post('/api/orders/checkout/wallet', {
-    body: { orderId, ...(promoCode ? { promoCode } : {}) },
+    body: { orderId, ...(promoCode ? { promoCode } : {}), ...(pin ? { pin } : {}) },
   })
 }
 

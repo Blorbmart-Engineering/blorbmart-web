@@ -36,6 +36,7 @@ import { FadeSlideIn, PressScale, staggerFor, useAnimatedNumber } from '../ui/mo
 import { Sheet } from '../ui/Sheet'
 import { ScreenBody, showToast } from '../ui/Screen'
 import { TransferAccountCard } from '../components/TransferAccountCard'
+import { WalletPinCard } from '../components/WalletPinCard'
 
 const PRESETS = [1000, 2000, 5000, 10000]
 
@@ -143,6 +144,11 @@ export default function WalletScreen() {
         {/* ── Bank transfer account ──────────────────────────────────── */}
         <div style={{ padding: 'var(--gap-xl) var(--gap-page) 0' }}>
           <TransferAccountCard onFunded={() => void load(true)} />
+        </div>
+
+        {/* ── Wallet PIN ─────────────────────────────────────────────── */}
+        <div style={{ padding: 'var(--gap-lg) var(--gap-page) 0' }}>
+          <WalletPinCard />
         </div>
 
         {/* ── Unfinished top-ups ─────────────────────────────────────── */}

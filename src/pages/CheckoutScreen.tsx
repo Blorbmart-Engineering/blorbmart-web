@@ -32,6 +32,7 @@ import { PressScale } from '../ui/motion'
 import { AppBar, ScreenBody, StickyFooter, showToast } from '../ui/Screen'
 import { AddressSheet } from '../components/AddressSheet'
 import { PaymentMethodTile, type PayMethod } from '../components/PaymentMethodTile'
+import { useWalletPin } from '../components/WalletPinSheet'
 
 export default function CheckoutScreen() {
   const navigate = useNavigate()
@@ -61,6 +62,7 @@ export default function CheckoutScreen() {
   const [note, setNote] = useState('')
   const [pricing, setPricing] = useState(true)
   const [paying, setPaying] = useState(false)
+  const walletPin = useWalletPin()
   const [error, setError] = useState<string | null>(null)
   const [addressOpen, setAddressOpen] = useState(false)
   // Set when the draft could not be started. The footer then offers the one
@@ -258,12 +260,19 @@ export default function CheckoutScreen() {
       return
     }
 
+    // The wallet PIN comes first; backing out of it leaves nothing charged.
+    let pin: string | undefined
+    if (method === 'wallet') {
+      pin = (await walletPin.ask(money(total))) ?? undefined
+      if (!pin) return
+    }
+
     setPaying(true)
     setError(null)
 
     try {
       if (method === 'wallet') {
-        await payWithWallet(orderId, promoApplied ?? undefined)
+        await payWithWallet(orderId, promoApplied ?? undefined, pin)
         await onPaid(orderId)
         return
       }
@@ -538,6 +547,8 @@ export default function CheckoutScreen() {
           if (orderId) void refreshPricing(orderId, promoApplied)
         }}
       />
+
+      {walletPin.sheet}
     </>
   )
 }

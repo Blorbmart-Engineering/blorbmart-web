@@ -129,6 +129,7 @@ export async function purchase({
   variationCode,
   meterType,
   idempotencyKey,
+  pin,
 }: {
   serviceKey: string
   paymentMethod: string
@@ -138,6 +139,8 @@ export async function purchase({
   variationCode?: string
   meterType?: string
   idempotencyKey?: string
+  /** The wallet PIN, on a wallet payment. */
+  pin?: string
 }): Promise<BillPayment> {
   const data = await Api.post('/api/bills/purchase', {
     body: {
@@ -148,6 +151,7 @@ export async function purchase({
       ...(accountNumber ? { accountNumber } : {}),
       ...(variationCode ? { variationCode } : {}),
       ...(meterType ? { meterType } : {}),
+      ...(pin ? { pin } : {}),
       idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
     },
   })
