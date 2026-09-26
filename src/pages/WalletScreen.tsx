@@ -37,6 +37,7 @@ import { Sheet } from '../ui/Sheet'
 import { ScreenBody, showToast } from '../ui/Screen'
 import { TransferAccountCard } from '../components/TransferAccountCard'
 import { WalletPinCard } from '../components/WalletPinCard'
+import { GiftCardsPromo } from '../components/gifts/GiftCardsPromo'
 
 const PRESETS = [1000, 2000, 5000, 10000]
 
@@ -139,6 +140,11 @@ export default function WalletScreen() {
               onClick={() => navigate('/transactions')}
             />
           </div>
+        </div>
+
+        {/* ── Gift cards ─────────────────────────────────────────────── */}
+        <div style={{ padding: 'var(--gap-xl) var(--gap-page) 0' }}>
+          <GiftCardsPromo />
         </div>
 
         {/* ── Bank transfer account ──────────────────────────────────── */}

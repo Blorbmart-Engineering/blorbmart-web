@@ -18,12 +18,12 @@
 const PENDING_KEY = 'blorb_pending_payment_v1'
 
 /** What was being paid for, so the return knows which endpoint to verify on. */
-export type PaymentKind = 'order' | 'wallet' | 'bill' | 'ticket'
+export type PaymentKind = 'order' | 'wallet' | 'bill' | 'ticket' | 'gift'
 
 export interface PendingPayment {
   kind: PaymentKind
   reference: string
-  /** Order id, bill id or ticket-order id. Empty for a wallet top-up. */
+  /** Order id, bill id, ticket-order id or gift card id. Empty for a wallet top-up. */
   id: string
   /** Where to send the customer once it verifies. */
   returnTo: string

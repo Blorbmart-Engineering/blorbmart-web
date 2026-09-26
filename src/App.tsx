@@ -67,6 +67,11 @@ const TicketScreen = lazy(() =>
   import('./pages/TicketsScreen').then((m) => ({ default: m.TicketScreen })),
 )
 
+const GiftCardsScreen = lazy(() => import('./pages/GiftCardsScreen'))
+const GiftComposeScreen = lazy(() => import('./pages/GiftComposeScreen'))
+const GiftCardScreen = lazy(() => import('./pages/GiftCardScreen'))
+const RedeemGiftScreen = lazy(() => import('./pages/RedeemGiftScreen'))
+
 const AccountScreen = lazy(() => import('./pages/AccountScreen'))
 const AddressesScreen = lazy(() => import('./pages/AddressesScreen'))
 const NotificationsScreen = lazy(() => import('./pages/NotificationsScreen'))
@@ -232,6 +237,18 @@ export default function App() {
               path="/tickets/:ticketId"
               element={<Protected><Shell><TicketScreen /></Shell></Protected>}
             />
+
+            {/* ── Gift cards ─────────────────────────────── */}
+            <Route path="/gifts" element={<Shell><GiftCardsScreen /></Shell>} />
+            {/* Pushed: its Pay button is a sticky footer (see /cart). */}
+            <Route path="/gifts/new" element={<Protected><GiftComposeScreen /></Protected>} />
+            <Route
+              path="/gifts/:id"
+              element={<Protected><Shell><GiftCardScreen /></Shell></Protected>}
+            />
+            {/* Public, and outside the shell: the QR on a card opens this for
+                someone who may never have used Blorbmart. */}
+            <Route path="/gift" element={<RedeemGiftScreen />} />
 
             {/* ── Account ────────────────────────────────── */}
             <Route path="/account" element={<Shell><AccountScreen /></Shell>} />

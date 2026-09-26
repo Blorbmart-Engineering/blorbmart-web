@@ -22,11 +22,14 @@ import { verifyPaystack } from '../data/orders'
 import { verifyTopUp, invalidateBalance } from '../data/wallet'
 import { verify as verifyBill } from '../data/bills'
 import { verifyTicketOrder } from '../data/events'
+import { verifyGiftCard } from '../data/giftCards'
 import { useCartStore } from '../store/cartStore'
 import { auth } from '../lib/firebase'
 import { showToast } from '../ui/Screen'
 
-async function settle(pending: PendingPayment, reference: string): Promise<void> {
+/** Settles the payment; returns navigation state for the screen it lands on. */
+async function settle(pending: PendingPayment, reference: string): Promise<unknown> {
+  let state: unknown
   switch (pending.kind) {
     case 'order':
       await verifyPaystack(reference, pending.id)
@@ -43,8 +46,16 @@ async function settle(pending: PendingPayment, reference: string): Promise<void>
     case 'ticket':
       await verifyTicketOrder(pending.id, reference)
       break
+    case 'gift': {
+      // The card's code is minted by this very confirmation, and comes back
+      // with it once — handed to the card screen rather than stored.
+      const result = await verifyGiftCard(pending.id, reference)
+      state = { code: result.code, downloadToken: result.downloadToken, justBought: true }
+      break
+    }
   }
   invalidateBalance()
+  return state
 }
 
 export default function PaymentReturn() {
@@ -69,10 +80,10 @@ export default function PaymentReturn() {
       setBusy(true)
 
       settle(pending, reference)
-        .then(() => {
+        .then((state) => {
           clearPending()
           showToast('Payment confirmed.', 'success')
-          navigate(pending.returnTo, { replace: true })
+          navigate(pending.returnTo, { replace: true, state })
         })
         .catch((e) => {
           clearPending()

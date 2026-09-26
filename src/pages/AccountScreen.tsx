@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Download,
   FileText,
+  Gift,
   GraduationCap,
   HelpCircle,
   Lock,
@@ -204,6 +205,12 @@ export default function AccountScreen() {
             label="Pay bills"
             subtitle="Airtime, data, power, TV"
             onClick={() => navigate('/bills')}
+          />
+          <Tile
+            icon={<Gift size={21} aria-hidden />}
+            label="Gift cards"
+            subtitle="Send one, or redeem a code"
+            onClick={() => navigate('/gifts')}
           />
           <Tile
             icon={<Bell size={21} aria-hidden />}

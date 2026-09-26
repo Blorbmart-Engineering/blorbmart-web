@@ -136,6 +136,7 @@ const PRIVATE: [RegExp, string][] = [
   [/^\/addresses$/, 'Addresses'],
   [/^\/notifications$/, 'Notifications'],
   [/^\/receipt\//, 'Receipt'],
+  [/^\/gifts\/.+/, 'Gift card'],
   [/^\/search$/, 'Search'],
   [/^\/verify$/, 'Verify your number'],
   [/^\/forgot-password$/, 'Reset your password'],
@@ -187,6 +188,23 @@ export function seoForPath(pathname: string): Seo {
   }
   if (/^\/events\/[^/]+$/.test(path)) return { title: brand('Event tickets'), path }
   if (/^\/r\/[^/]+$/.test(path)) return { title: brand('Order online'), path }
+  if (path === '/gifts') {
+    return {
+      title: brand('Gift cards — send a little joy'),
+      description:
+        'Beautiful gift cards for birthdays, anniversaries, weddings, Eid, Christmas and more, from ₦2,000. They land straight in their Blorbmart wallet.',
+      path,
+    }
+  }
+  // Indexable, but never with a code in it: the code rides in the fragment,
+  // which no crawler or server ever sees.
+  if (path === '/gift') {
+    return {
+      title: brand('Redeem a gift card'),
+      description: 'Got a Blorbmart gift card? Enter the code and its value goes straight into your wallet.',
+      path,
+    }
+  }
   if (path === '/bills') {
     return {
       title: brand('Buy airtime, data, electricity and TV'),
