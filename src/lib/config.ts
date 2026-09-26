@@ -59,6 +59,16 @@ export const TRUSTED_API_ORIGINS = [new URL(API_BASE_URL).origin]
 export const VAPID_KEY = env.VITE_FIREBASE_VAPID_KEY ??
   'BGVY6js1W1Fo9V9ZYLn3JRJSFQPZZQfkbq8s7qaNepfaCdqUrMQX6HBTLco-Ok-YOPe_blzFJo0yZly4BhY_K8U'
 
+/**
+ * Mapbox public token (pk.…) for the live rider map on the tracking screen.
+ *
+ * Public by design, like the Firebase config — restrict it to the shop's
+ * URLs in the Mapbox dashboard instead of hiding it. Without one the map is
+ * simply not drawn and the ETA card carries the screen as before.
+ */
+export const MAPBOX_TOKEN =
+  env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoiYmxvcmJtYXJ0IiwiYSI6ImNtdWlkeG4zcDByMjcyeXF5MTEyNzIwamwifQ.8q2zSysrgCJXr3vsObBFvQ'
+
 /** Image hosts we are willing to render. Anything else gets the placeholder. */
 export const ALLOWED_IMAGE_HOSTS = [
   'res.cloudinary.com',

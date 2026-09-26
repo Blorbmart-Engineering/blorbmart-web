@@ -172,7 +172,26 @@ export interface DeliveryTracking {
   status: string
   etaMinutes: number | null
   distanceKm: number | null
+  /** Where the rider was at their last heartbeat (every ~20s on a trip). */
+  riderLocation: LatLng | null
+  /** The customer's drop-off pin, resolved by the backend. */
+  destination: LatLng | null
   updatedAt: Date | null
+}
+
+export interface LatLng {
+  lat: number
+  lng: number
+}
+
+function latLngFromMap(raw: unknown): LatLng | null {
+  if (!raw || typeof raw !== 'object') return null
+  const m = raw as Record<string, unknown>
+  const lat = Number(m.latitude ?? m.lat)
+  const lng = Number(m.longitude ?? m.lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  if (lat === 0 && lng === 0) return null
+  return { lat, lng }
 }
 
 export function trackingFromMap(raw: unknown): DeliveryTracking | null {
@@ -185,8 +204,15 @@ export function trackingFromMap(raw: unknown): DeliveryTracking | null {
     status: asString(m.status),
     etaMinutes: typeof eta === 'number' ? Math.round(eta) : null,
     distanceKm: typeof distance === 'number' ? distance : null,
+    riderLocation: latLngFromMap(m.riderLocation),
+    destination: latLngFromMap(m.destination),
     updatedAt: asDate(m.updatedAt),
   }
+}
+
+/** Whether there is a live rider position worth putting on a map. */
+export function trackingHasRider(t: DeliveryTracking | null): boolean {
+  return !!t && t.active && t.riderLocation != null
 }
 
 /** Whether there is something worth showing a waiting customer. */

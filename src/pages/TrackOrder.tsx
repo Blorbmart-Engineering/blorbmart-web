@@ -3,7 +3,7 @@
    and pin_card.dart.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Lock, MessageCircle, Package, Phone, ReceiptText } from 'lucide-react'
 import { deliveryPin, watchOrder } from '../data/orders'
@@ -17,6 +17,7 @@ import {
   showsPin,
   trackingDistanceLabel,
   trackingHasEta,
+  trackingHasRider,
   type BlorbOrder,
 } from '../models/order'
 import { Button, IconButton } from '../ui/Button'
@@ -27,6 +28,11 @@ import { StageBar } from '../components/HomeWidgets'
 import { StageIcon } from '../components/StageIcon'
 
 const SUPPORT_NUMBER = '2349161234567'
+
+// mapbox-gl is the heaviest thing on this screen and only matters once a
+// rider is on the road, so it loads on demand rather than with the page.
+const LiveRiderMap = lazy(() => import('../components/LiveRiderMap'))
+const MAP_HEIGHT = 240
 
 export default function TrackOrder() {
   const { orderId = '' } = useParams()
@@ -180,6 +186,23 @@ export default function TrackOrder() {
             )}
           </div>
         </FadeSlideIn>
+
+        {/* ── Live map ───────────────────────────────────────────────── */}
+        {!isTerminal(order.stage) &&
+          trackingHasRider(order.tracking) &&
+          order.tracking?.riderLocation && (
+            <FadeSlideIn delay={40}>
+              <div style={{ marginTop: 'var(--gap-lg)' }}>
+                <Suspense fallback={<Skeleton height={MAP_HEIGHT} radius="var(--radius-lg)" />}>
+                  <LiveRiderMap
+                    rider={order.tracking.riderLocation}
+                    destination={order.tracking.destination}
+                    height={MAP_HEIGHT}
+                  />
+                </Suspense>
+              </div>
+            </FadeSlideIn>
+          )}
 
         {/* ── PIN ────────────────────────────────────────────────────── */}
         {showsPin(order) && (
