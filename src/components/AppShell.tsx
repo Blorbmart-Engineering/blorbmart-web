@@ -19,6 +19,7 @@ import { useCartStore, cartItemCount, cartStoreName, cartSubtotal } from '../sto
 import { useSessionStore, isBillsOnly } from '../store/sessionStore'
 import { money } from '../lib/format'
 import { useAnimatedNumber } from '../ui/motion'
+import AnnouncementPopup from './AnnouncementPopup'
 
 interface TabSpec {
   label: string
@@ -58,6 +59,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
       <main style={{ flex: 1 }}>{children}</main>
+
+      {/* The flyer an admin published, once per app open. Mounted in the
+          shell so it greets people on the browsing screens, never mid-checkout
+          or on the sign-in pages. */}
+      <AnnouncementPopup />
 
       <div
         style={{
