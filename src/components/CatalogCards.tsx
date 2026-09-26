@@ -300,6 +300,7 @@ export function DishRailCard({
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 6 }}>
         <span className="t-price-sm">{money(effectivePrice(item))}</span>
         {hasDiscount(item) && <span className="t-price-struck">{money(item.price)}</span>}
+        {item.unit && <span className="t-caption-sm">/ {item.unit}</span>}
       </div>
     </PressScale>
   )
@@ -371,6 +372,7 @@ export function DishRow({
         >
           <span className="t-price">{money(effectivePrice(item))}</span>
           {hasDiscount(item) && <span className="t-price-struck">{money(item.price)}</span>}
+          {item.unit && <span className="t-caption-sm">/ {item.unit}</span>}
           {soldOut && <Pill label="Sold out" tone="neutral" dense />}
         </div>
       </div>

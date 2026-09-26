@@ -36,6 +36,7 @@ import {
   HomeHeader,
   HomeSkeleton,
   LiveOrderCard,
+  MarketCard,
   VerticalGrid,
 } from '../components/HomeWidgets'
 import { AddressSheet } from '../components/AddressSheet'
@@ -89,6 +90,10 @@ export default function HomeScreen() {
     () => sortForBrowsing(allVendors.filter((v) => v.vertical === 'restaurants')),
     [allVendors],
   )
+
+  // One per campus, and only once its head of operations has opened it —
+  // the catalogue read already drops hidden stores and other campuses.
+  const market = useMemo(() => allVendors.find((v) => v.vertical === 'market') ?? null, [allVendors])
 
   /**
    * Cuisine filter values, derived from what vendors actually offer rather
@@ -153,6 +158,13 @@ export default function HomeScreen() {
         <div style={{ padding: 'var(--gap-xxl) var(--gap-page) 0' }}>
           <VerticalGrid onSelect={openHub} />
         </div>
+
+        {/* ── The campus market ─────────────────────────────────────── */}
+        {market && (
+          <div style={{ padding: 'var(--gap-xl) var(--gap-page) 0' }}>
+            <MarketCard vendor={market} />
+          </div>
+        )}
 
         {/* ── Live order ────────────────────────────────────────────── */}
         <LiveOrderStrip />

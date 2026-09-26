@@ -272,11 +272,13 @@ export default function VendorScreen() {
             ))
           ) : visible.length === 0 ? (
             <EmptyState
-              title={query ? 'Nothing matches that' : 'No dishes yet'}
+              title={query ? 'Nothing matches that' : store?.vertical === 'market' ? 'Nothing listed yet' : 'No dishes yet'}
               message={
                 query
                   ? 'Try a different word, or clear the search to see the whole menu.'
-                  : 'This kitchen has not published its menu yet. Check back shortly.'
+                  : store?.vertical === 'market'
+                    ? 'The market list is being put together. Check back shortly.'
+                    : 'This kitchen has not published its menu yet. Check back shortly.'
               }
               icon={<UtensilsCrossed size={28} aria-hidden />}
               compact

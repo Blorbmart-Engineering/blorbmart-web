@@ -23,7 +23,7 @@ import {
  * one of them, and each carries its own identity colour, icon asset and copy
  * so screens never hard-code a vertical.
  */
-export type Vertical = 'restaurants' | 'pharmacy' | 'events' | 'bills'
+export type Vertical = 'restaurants' | 'pharmacy' | 'events' | 'bills' | 'market'
 
 export interface VerticalSpec {
   id: Vertical
@@ -80,6 +80,21 @@ export const VERTICALS: Record<Vertical, VerticalSpec> = {
     softColor: 'var(--color-bills-soft)',
     itemNoun: 'bill',
   },
+  /*
+   * The campus local market. Not one of the four hub tiles: each campus has a
+   * single market, so it is reached from its own card on home rather than a
+   * hub listing one store.
+   */
+  market: {
+    id: 'market',
+    label: 'Local market',
+    singular: 'Market',
+    tagline: 'Fresh from the market',
+    asset: '/assets/restaurant.png',
+    color: 'var(--color-market)',
+    softColor: 'var(--color-market-soft)',
+    itemNoun: 'item',
+  },
 }
 
 /** The order the hub grid renders in. */
@@ -98,6 +113,9 @@ export function verticalFromId(raw: unknown): Vertical {
     case 'bills':
     case 'bill':
       return 'bills'
+    case 'market':
+    case 'local_market':
+      return 'market'
     default:
       return 'restaurants'
   }
@@ -272,6 +290,8 @@ export interface MenuItem {
   isPopular: boolean
   requiresPrescription: boolean
   searchKeywords: string[]
+  /** What the price buys, on a market item: "1 kg", "per piece". Empty elsewhere. */
+  unit: string
 }
 
 export function addonOptionFromMap(m: Record<string, unknown>): AddonOption {
@@ -335,6 +355,10 @@ export function menuItemFromMap(id: string, m: Record<string, unknown>): MenuIte
 
   const price = asDouble(m.price)
   const discount = asDouble(m.discountPrice)
+  const unit = asString(m.unit)
+  // Market items store "Price per 1 kg" as their description so older apps,
+  // which have no unit field, still say it. Here the unit sits by the price.
+  const description = asString(m.description)
 
   return {
     id,
@@ -347,7 +371,7 @@ export function menuItemFromMap(id: string, m: Record<string, unknown>): MenuIte
     storeName: asString(m.storeName ?? m.businessName),
     vendorId: asString(m.vendorId),
     vertical: verticalFromId(m.vertical),
-    description: asString(m.description),
+    description: unit && description === `Price per ${unit}` ? '' : description,
     images: asStringList(m.images),
     section: asString(m.section ?? m.subCategoryName),
     categoryName: asString(m.categoryName),
@@ -364,6 +388,7 @@ export function menuItemFromMap(id: string, m: Record<string, unknown>): MenuIte
     isPopular: asBool(m.isPopular) || asInt(m.totalSold) >= 25,
     requiresPrescription: asBool(m.requiresPrescription),
     searchKeywords: asStringList(m.searchKeywords),
+    unit,
   }
 }
 

@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, query, where, limit as fbLimit } from 'firebase/firestore'
 import {
   Bell,
+  Carrot,
   ChevronDown,
   ChevronRight,
   Lock,
@@ -19,6 +20,8 @@ import { addressLabel } from '../models/address'
 import {
   HUB_ORDER,
   VERTICALS,
+  isOpenNow,
+  type Vendor,
   type Vertical,
 } from '../models/catalog'
 import {
@@ -416,6 +419,66 @@ export function VerticalGrid({ onSelect }: { onSelect: (v: Vertical) => void }) 
         )
       })}
     </div>
+  )
+}
+
+/* ── The campus market ─────────────────────────────────────────────────── */
+
+/**
+ * Shop from your local market. The campus market is one store, so it gets a
+ * card that goes straight to it rather than a hub tile that lists one thing.
+ */
+export function MarketCard({ vendor }: { vendor: Vendor }) {
+  const navigate = useNavigate()
+  const open = isOpenNow(vendor)
+
+  return (
+    <FadeSlideIn>
+      <PressScale
+        scale={0.985}
+        onClick={() => navigate(`/r/${vendor.id}`)}
+        style={{ display: 'block', width: '100%', textAlign: 'left' }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--gap-lg)',
+            padding: 'var(--gap-lg)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--color-market-soft)',
+            border: '1px solid color-mix(in srgb, var(--color-market) 18%, transparent)',
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              display: 'grid',
+              placeItems: 'center',
+              width: 52,
+              height: 52,
+              flexShrink: 0,
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-market)',
+              color: '#fff',
+            }}
+          >
+            <Carrot size={26} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="t-h4 clamp-1" style={{ color: 'var(--color-ink-strong)' }}>
+              Shop from your local market
+            </div>
+            <div className="t-body-sm clamp-2" style={{ marginTop: 2 }}>
+              {open
+                ? 'Pepper, chicken, fish, yam and more, bought fresh and brought to you by a rider.'
+                : `${vendor.name} is closed right now. Browse the list for later.`}
+            </div>
+          </div>
+          <ChevronRight size={20} aria-hidden style={{ color: 'var(--color-market)', flexShrink: 0 }} />
+        </div>
+      </PressScale>
+    </FadeSlideIn>
   )
 }
 

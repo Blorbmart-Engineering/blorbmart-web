@@ -69,6 +69,8 @@
   --color-events-soft:      #F0EBFF;
   --color-bills:            #1F77F1;
   --color-bills-soft:       #E7F0FE;
+  --color-market:           #D97706;
+  --color-market-soft:      #FEF3E2;
 
   /* ── Corner radii. Blorbmart is a soft brand — nothing sharper than 8. */
   --radius-xs:    8px;

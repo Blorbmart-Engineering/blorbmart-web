@@ -140,7 +140,9 @@ export default function TrackOrder() {
                 >
                   {order.stage === 'cancelled' && order.cancelReason
                     ? order.cancelReason
-                    : stage.blurb}
+                    : order.vertical === 'market' && order.stage === 'placed'
+                      ? 'A rider buys your items at the market, then brings them to you.'
+                      : stage.blurb}
                 </p>
               </div>
             </div>
