@@ -7,8 +7,8 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ReceiptText } from 'lucide-react'
-import { watchHistory } from '../data/orders'
+import { ChevronRight, ReceiptText, WifiOff } from 'lucide-react'
+import { peekHistory, watchHistory } from '../data/orders'
 import { money, timeAgo } from '../lib/format'
 import {
   isTerminal,
@@ -27,20 +27,25 @@ import { StageBar } from '../components/HomeWidgets'
 export default function OrdersScreen() {
   const navigate = useNavigate()
   const signedIn = useSessionStore(isSignedIn)
-  const [orders, setOrders] = useState<BlorbOrder[] | null>(null)
+  // Until the session has restored, "signed out" is a guess. Showing the
+  // sign-in prompt for it flashed "Sign in to see your orders" at somebody
+  // who was signed in the whole time.
+  const ready = useSessionStore((s) => s.ready)
+  // The list this session last drew, so coming back to the tab is instant.
+  const [orders, setOrders] = useState<BlorbOrder[] | null>(() => peekHistory())
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    if (!signedIn) {
-      setOrders([])
-      return
-    }
-    return watchHistory(setOrders)
-  }, [signedIn])
+    if (!signedIn) return
+    setFailed(false)
+    return watchHistory(setOrders, 40, () => setFailed(true))
+  }, [signedIn, attempt])
 
   const live = (orders ?? []).filter((o) => !isTerminal(o.stage))
   const past = (orders ?? []).filter((o) => isTerminal(o.stage))
 
-  if (!signedIn) {
+  if (ready && !signedIn) {
     return (
       <ScreenBody bottomGap="150px">
         <div style={{ paddingTop: 'calc(var(--safe-top) + var(--gap-xl))' }}>
@@ -62,7 +67,15 @@ export default function OrdersScreen() {
         <SectionHeader title="Your orders" subtitle="Everything you have ordered, newest first" />
       </div>
 
-      {orders === null ? (
+      {orders === null && failed ? (
+        <EmptyState
+          title="Could not load your orders"
+          message="Check your connection. Your orders are safe."
+          icon={<WifiOff size={30} aria-hidden />}
+          actionLabel="Try again"
+          onAction={() => setAttempt((n) => n + 1)}
+        />
+      ) : orders === null ? (
         <div style={{ paddingInline: 'var(--gap-page)' }}>
           {[0, 1, 2].map((i) => (
             <Skeleton

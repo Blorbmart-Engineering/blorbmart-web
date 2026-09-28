@@ -38,6 +38,7 @@ import { ScreenBody, showToast } from '../ui/Screen'
 import { TransferAccountCard } from '../components/TransferAccountCard'
 import { WalletPinCard } from '../components/WalletPinCard'
 import { GiftCardsPromo } from '../components/gifts/GiftCardsPromo'
+import { Spinner } from '../ui/Loader'
 
 const PRESETS = [1000, 2000, 5000, 10000]
 
@@ -325,11 +326,7 @@ function UnsettledRow({ entry, onDone }: { entry: WalletEntry; onDone: () => voi
         />
       )}
       <IconButton label="Cancel this top-up" size={36} onClick={() => void cancel()}>
-        <RotateCw
-          size={16}
-          aria-hidden
-          style={busy ? { animation: 'blorb-spin 900ms linear infinite' } : undefined}
-        />
+        {busy ? <Spinner size={16} /> : <RotateCw size={16} aria-hidden />}
       </IconButton>
     </div>
   )

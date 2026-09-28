@@ -17,6 +17,7 @@ import { SplashVisual } from './components/SplashVisual'
 import { isSignedIn, useSessionStore } from './store/sessionStore'
 import { onForegroundPush } from './lib/push'
 import { showToast } from './ui/Screen'
+import { RouteLoader } from './ui/Loader'
 
 /* ═══════════════════════════════════════════════════════════════════════
    Routes.
@@ -133,6 +134,28 @@ function ForegroundPush() {
   return null
 }
 
+/*
+ * Whether a screen has painted yet. Until then a lazy route is part of boot
+ * and waits under the splash; after it, a screen still downloading gets the
+ * in-app loader instead of the whole blue splash flashing up again, which on
+ * a first visit to every tab looked like the app restarting.
+ */
+let painted = false
+
+function Painted() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    // The boot screen is the splash itself; the first real screen after it
+    // is what counts.
+    if (pathname !== '/') painted = true
+  }, [pathname])
+  return null
+}
+
+function RouteFallback() {
+  return painted ? <RouteLoader /> : <SplashVisual />
+}
+
 function Boot() {
   const start = useSessionStore((s) => s.start)
   useEffect(() => {
@@ -158,7 +181,8 @@ export default function App() {
           toastOptions={{ duration: 3200 }}
         />
 
-        <Suspense fallback={<SplashVisual />}>
+        <Suspense fallback={<RouteFallback />}>
+          <Painted />
           <Routes>
             {/* ── Boot ───────────────────────────────────── */}
             <Route path="/" element={<SplashScreen />} />
@@ -184,9 +208,11 @@ export default function App() {
                 landed on "View basket" and went straight back to /cart. */}
             <Route path="/cart" element={<CartScreen />} />
             <Route path="/checkout" element={<Protected><CheckoutScreen /></Protected>} />
+            {/* Full screen, like the phone app's pushed route: the payment
+                celebration is not a tab. */}
             <Route
               path="/order-placed/:orderId"
-              element={<Protected><Shell><OrderPlaced /></Shell></Protected>}
+              element={<Protected><OrderPlaced /></Protected>}
             />
 
             {/* ── Post-order ─────────────────────────────── */}

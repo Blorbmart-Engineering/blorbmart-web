@@ -19,12 +19,20 @@ import {
   WifiOff,
   Zap,
 } from 'lucide-react'
-import { catalog, recentSafe, servicesInCategory, type BillCatalog } from '../data/bills'
+import {
+  catalog,
+  peekCatalog,
+  prefetchVariations,
+  recentSafe,
+  servicesInCategory,
+  type BillCatalog,
+} from '../data/bills'
 import { money, timeAgo } from '../lib/format'
 import {
   BILL_STATUS_COLORS,
   BILL_STATUS_LABELS,
   billTitle,
+  needsVariation,
   type BillPayment,
   type BillService,
 } from '../models/bills'
@@ -50,7 +58,9 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
   const session = useSessionStore()
   const signedIn = isSignedIn(session)
 
-  const [data, setData] = useState<BillCatalog | null>(null)
+  // The copy this device already has draws the first frame; the network
+  // brings a current one behind it.
+  const [data, setData] = useState<BillCatalog | null>(() => peekCatalog())
   const [recent, setRecent] = useState<BillPayment[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -81,7 +91,9 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
         const result = await catalog(refresh)
         setData(result)
       } catch {
-        setError('Could not load billers. Pull down to retry.')
+        // A stored catalogue on screen is still usable; only an empty screen
+        // needs the error.
+        if (!peekCatalog()) setError('Could not load billers. Pull down to retry.')
       }
       if (signedIn) setRecent(await recentSafe(4))
     },
@@ -98,6 +110,13 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
   const active =
     data?.categories.find((c) => c.id === category)?.id ?? data?.categories[0]?.id ?? null
   const services = data && active ? servicesInCategory(data, active) : []
+
+  // The plans for every network on this tab start loading now, so tapping one
+  // opens straight onto its bundles instead of onto skeletons.
+  const planKeys = services.filter(needsVariation).map((s) => s.id).join(',')
+  useEffect(() => {
+    if (planKeys) prefetchVariations(planKeys.split(','))
+  }, [planKeys])
 
   return (
     <>

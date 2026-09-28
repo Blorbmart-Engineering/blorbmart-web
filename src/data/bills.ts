@@ -44,6 +44,7 @@ export const serviceById = (c: BillCatalog, id: string) =>
 let catalogCache: BillCatalog | null = null
 let catalogAt = 0
 const variationCache = new Map<string, BillVariation[]>()
+const variationsInFlight = new Map<string, Promise<BillVariation[]>>()
 
 function listOf<T>(raw: unknown, parse: (m: Record<string, unknown>) => T): T[] {
   if (!Array.isArray(raw)) return []
@@ -52,40 +53,132 @@ function listOf<T>(raw: unknown, parse: (m: Record<string, unknown>) => T): T[] 
     .map(parse)
 }
 
+/* ── The copy on this device ─────────────────────────────────────────────
+
+   Bills used to open on skeletons every time: the catalogue lived only in
+   memory, so a fresh launch — and every launch that caught the API asleep on
+   Render — waited on the network before a single biller appeared. The raw
+   responses are now kept in localStorage and drawn at once, while the
+   network brings a current copy behind them (stale-while-revalidate).
+
+   The raw JSON is stored, not the parsed models, so a model change between
+   releases re-parses the same data rather than reading a stale shape. */
+
+const STORE_PREFIX = 'blorb_bills_v1:'
+/** Oldest copy worth drawing. Past this, skeletons are more honest. */
+const CATALOG_MAX_AGE = 3 * 24 * 60 * 60_000
+const VARIATIONS_MAX_AGE = 24 * 60 * 60_000
+
+function readStored(key: string, maxAge: number): Json | null {
+  try {
+    const raw = localStorage.getItem(STORE_PREFIX + key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { at?: number; data?: Json }
+    if (!parsed?.data || !parsed.at || Date.now() - parsed.at > maxAge) return null
+    return parsed.data
+  } catch {
+    return null
+  }
+}
+
+function writeStored(key: string, data: Json): void {
+  try {
+    localStorage.setItem(STORE_PREFIX + key, JSON.stringify({ at: Date.now(), data }))
+  } catch {
+    /* storage full or blocked — the network copy still works */
+  }
+}
+
+type Json = Record<string, unknown>
+
+function catalogFrom(data: Json): BillCatalog {
+  return {
+    categories: listOf(data.categories, billCategoryFromMap),
+    services: listOf(data.services, billServiceFromMap),
+    simulated: data.simulated === true,
+  }
+}
+
+function variationsFrom(data: Json): BillVariation[] {
+  return listOf(data.variations, billVariationFromMap)
+    .filter((v) => v.amount > 0)
+    .sort((a, b) => a.amount - b.amount)
+}
+
 /**
- * The catalogue is cached for minutes rather than the session: it now carries
- * the transaction fee on each biller and leaves out categories the aggregator
- * cannot sell, and both of those change without a deploy. A half-hour cache
- * would quote a fee the backend has stopped charging.
+ * The catalogue this device already has, without waiting — for a screen's
+ * first frame. Null on a device that has never loaded bills.
+ */
+export function peekCatalog(): BillCatalog | null {
+  if (catalogCache) return catalogCache
+  const stored = readStored('catalog', CATALOG_MAX_AGE)
+  if (!stored) return null
+  catalogCache = catalogFrom(stored)
+  // catalogAt stays 0: a stored copy is drawn, but never counts as fresh.
+  return catalogCache
+}
+
+/**
+ * The catalogue from the network, cached for minutes rather than the session:
+ * it carries the transaction fee on each biller and leaves out categories the
+ * aggregator cannot sell, and both of those change without a deploy. A
+ * half-hour cache would quote a fee the backend has stopped charging — which
+ * is why the stored copy from peekCatalog is only ever a first frame.
  */
 export async function catalog(refresh = false): Promise<BillCatalog> {
   const fresh = catalogAt > 0 && Date.now() - catalogAt < 10 * 60_000
   if (!refresh && fresh && catalogCache) return catalogCache
 
   const data = await Api.get('/api/bills/catalog', { auth: false })
-  catalogCache = {
-    categories: listOf(data.categories, billCategoryFromMap),
-    services: listOf(data.services, billServiceFromMap),
-    simulated: data.simulated === true,
-  }
+  catalogCache = catalogFrom(data)
   catalogAt = Date.now()
+  writeStored('catalog', data)
   return catalogCache
 }
 
+/** A biller's plans this device already has, without waiting. */
+export function peekVariations(serviceKey: string): BillVariation[] | null {
+  const cached = variationCache.get(serviceKey)
+  if (cached) return cached
+  const stored = readStored(`variations:${serviceKey}`, VARIATIONS_MAX_AGE)
+  return stored ? variationsFrom(stored) : null
+}
+
+/**
+ * A biller's plans from the network, once per session. Concurrent callers —
+ * the prefetch from the bills screen and the form opening a moment later —
+ * share one request.
+ */
 export async function variations(serviceKey: string): Promise<BillVariation[]> {
   const cached = variationCache.get(serviceKey)
   if (cached) return cached
 
-  const data = await Api.get(
-    `/api/bills/services/${encodeURIComponent(serviceKey)}/variations`,
-    { auth: false },
-  )
-  const list = listOf(data.variations, billVariationFromMap)
-    .filter((v) => v.amount > 0)
-    .sort((a, b) => a.amount - b.amount)
+  const pending = variationsInFlight.get(serviceKey)
+  if (pending) return pending
 
-  variationCache.set(serviceKey, list)
-  return list
+  const request = Api.get(`/api/bills/services/${encodeURIComponent(serviceKey)}/variations`, {
+    auth: false,
+  })
+    .then((data) => {
+      const list = variationsFrom(data)
+      variationCache.set(serviceKey, list)
+      writeStored(`variations:${serviceKey}`, data)
+      return list
+    })
+    .finally(() => variationsInFlight.delete(serviceKey))
+  variationsInFlight.set(serviceKey, request)
+  return request
+}
+
+/**
+ * Starts loading plans before they are asked for, so the bundle grid is ready
+ * when a network is tapped. Best effort and silent.
+ */
+export function prefetchVariations(serviceKeys: string[]): void {
+  for (const key of serviceKeys) {
+    if (variationCache.has(key) || variationsInFlight.has(key)) continue
+    variations(key).catch(() => undefined)
+  }
 }
 
 /**

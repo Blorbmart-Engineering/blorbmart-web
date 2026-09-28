@@ -14,7 +14,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { Copy, Download, ReceiptText, Share2 } from 'lucide-react'
+import { Copy, Download, Printer, ReceiptText, Share2 } from 'lucide-react'
 import { apiErrorMessage } from '../lib/api'
 import { dayAndTime, moneyExact } from '../lib/format'
 import { fetchReceipt, receiptPdfUrl } from '../data/receipts'
@@ -25,10 +25,11 @@ import {
   type ReceiptKind,
   type ReceiptRow,
 } from '../models/receipt'
-import { Button } from '../ui/Button'
-import { EmptyState, Skeleton } from '../ui/kit'
-import { FadeSlideIn } from '../ui/motion'
+import { Button, IconButton } from '../ui/Button'
+import { EmptyState } from '../ui/kit'
 import { AppBar, ScreenBody, showToast } from '../ui/Screen'
+import { PageLoader } from '../ui/Loader'
+import { ReceiptPrinter } from '../components/ReceiptPrinter'
 
 const KINDS: ReceiptKind[] = ['wallet', 'bill', 'order', 'ticket']
 
@@ -100,6 +101,9 @@ export default function ReceiptScreen() {
   const [error, setError] = useState<string | null>(null)
   const [qr, setQr] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  /** Bumped to print the receipt again. */
+  const [printRun, setPrintRun] = useState(1)
+  const [printed, setPrinted] = useState(false)
 
   const safeKind: ReceiptKind = KINDS.includes(kind as ReceiptKind)
     ? (kind as ReceiptKind)
@@ -178,9 +182,7 @@ export default function ReceiptScreen() {
     return (
       <>
         <AppBar title="Receipt" />
-        <ScreenBody padded>
-          <Skeleton height={480} radius="var(--radius-lg)" />
-        </ScreenBody>
+        <PageLoader label="Fetching your receipt" />
       </>
     )
   }
@@ -206,10 +208,24 @@ export default function ReceiptScreen() {
 
   return (
     <>
-      <AppBar title={receipt.kindLabel} subtitle={receipt.receiptNo} />
+      <AppBar
+        title={receipt.kindLabel}
+        subtitle={receipt.receiptNo}
+        trailing={
+          <IconButton
+            label="Print again"
+            onClick={() => {
+              setPrinted(false)
+              setPrintRun((n) => n + 1)
+            }}
+          >
+            <Printer size={19} aria-hidden />
+          </IconButton>
+        }
+      />
 
       <ScreenBody bottomGap="150px" padded>
-        <FadeSlideIn>
+        <ReceiptPrinter run={printRun} onPrinted={() => setPrinted(true)}>
           <div className="rcpt-sheet">
             <div className="rcpt">
               <div className="rcpt-body">
@@ -371,9 +387,20 @@ export default function ReceiptScreen() {
               </div>
             </div>
           </div>
-        </FadeSlideIn>
+        </ReceiptPrinter>
 
-        <div style={{ display: 'flex', gap: 'var(--gap-md)', marginTop: 'var(--gap-xl)' }}>
+        {/* The actions arrive once the paper is out, not while it feeds. */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 'var(--gap-md)',
+            marginTop: 'var(--gap-sm)',
+            opacity: printed ? 1 : 0,
+            transform: printed ? 'none' : 'translateY(8px)',
+            transition: 'opacity var(--dur-slow) var(--ease-emphasized), transform var(--dur-slow) var(--ease-emphasized)',
+            pointerEvents: printed ? undefined : 'none',
+          }}
+        >
           <Button
             label="Share"
             kind="outline"

@@ -3,11 +3,27 @@
 
    Which fields appear is decided entirely by the backend's `inputs` array, so
    a new biller with a different shape ships without an app release.
+
+   Built so nobody has to wonder what comes next:
+
+     * three steps across the top — who, what, pay — tick themselves off as
+       they are done;
+     * the footer always names the next step, and its button goes there: it
+       scrolls to the field and puts the cursor in it, rather than sitting
+       greyed out with no explanation;
+     * once a valid number is in, the keyboard goes away and the plans come
+       up, because a keyboard over a list of forty bundles was where people
+       got stuck;
+     * the footer keeps what was chosen in view, so a long plan list never
+       pushes "what am I paying for" off the screen.
+
+   It opens on the catalogue and plans this device already has, and refreshes
+   them behind the first frame.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { BadgeCheck, Info, LoaderCircle, Wallet } from 'lucide-react'
+import { BadgeCheck, Check, ChevronRight, Info, Wallet } from 'lucide-react'
 import { apiErrorMessage, warmUp } from '../lib/api'
 import { asString, guessNetwork, money, normaliseNgPhone } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
@@ -16,6 +32,8 @@ import {
   beneficiaries,
   catalog,
   newIdempotencyKey,
+  peekCatalog,
+  peekVariations,
   purchase,
   serviceById,
   variations,
@@ -43,6 +61,7 @@ import { ChipRail, EmptyState, Skeleton } from '../ui/kit'
 import { PressScale } from '../ui/motion'
 import { AppBar, ScreenBody, StickyFooter, showToast } from '../ui/Screen'
 import { Sheet } from '../ui/Sheet'
+import { Spinner } from '../ui/Loader'
 import { PaymentMethodTile, type PayMethod } from '../components/PaymentMethodTile'
 import { useWalletPin } from '../components/WalletPinSheet'
 
@@ -51,13 +70,23 @@ const METER_TYPES = [
   { id: 'postpaid', label: 'Postpaid' },
 ]
 
+type StepId = 'who' | 'what' | 'pay'
+
+function initialService(serviceKey: string): BillService | null {
+  const cached = peekCatalog()
+  return cached ? serviceById(cached, serviceKey) : null
+}
+
 export default function BillFormScreen() {
   const { serviceKey = '' } = useParams()
   const navigate = useNavigate()
 
-  const [service, setService] = useState<BillService | null>(null)
+  const [service, setService] = useState<BillService | null>(() => initialService(serviceKey))
   const [missing, setMissing] = useState(false)
-  const [bundles, setBundles] = useState<BillVariation[] | null>(null)
+  const [bundles, setBundles] = useState<BillVariation[] | null>(() => {
+    const s = initialService(serviceKey)
+    return s && needsVariation(s) ? peekVariations(s.id) : null
+  })
   const [bundleError, setBundleError] = useState<string | null>(null)
   const [saved, setSaved] = useState<Beneficiary[]>([])
 
@@ -76,10 +105,22 @@ export default function BillFormScreen() {
 
   const [method, setMethod] = useState<PayMethod>('wallet')
   const [walletBalance, setWalletBalance] = useState(0)
+  const [balanceKnown, setBalanceKnown] = useState(false)
+  /** Whether card was chosen for the customer because the wallet was short. */
+  const cardChosenForThem = useRef(false)
   const [paying, setPaying] = useState(false)
   const walletPin = useWalletPin()
   useBackFromPaystack(() => setPaying(false))
   const [error, setError] = useState<string | null>(null)
+  /** The section the footer just sent the customer to, briefly lit. */
+  const [nudged, setNudged] = useState<StepId | null>(null)
+
+  const whoRef = useRef<HTMLDivElement>(null)
+  const whatRef = useRef<HTMLDivElement>(null)
+  const payRef = useRef<HTMLDivElement>(null)
+  const phoneInput = useRef<HTMLInputElement>(null)
+  const accountInput = useRef<HTMLInputElement>(null)
+  const amountInput = useRef<HTMLInputElement>(null)
 
   // Minted once per screen and reused across retries, so a double tap on a
   // slow connection is charged once.
@@ -87,37 +128,51 @@ export default function BillFormScreen() {
 
   useEffect(() => {
     warmUp()
-    void balance().then(setWalletBalance)
+    void balance()
+      .then(setWalletBalance)
+      .finally(() => setBalanceKnown(true))
     void beneficiaries().then(setSaved)
     // Live, so a top-up finished in another tab is usable here at once.
     return watchLiveBalance(setWalletBalance)
   }, [])
 
   useEffect(() => {
-    void catalog().then((data) => {
-      const found = serviceById(data, serviceKey)
-      if (!found) setMissing(true)
-      else setService(found)
-    })
+    catalog()
+      .then((data) => {
+        const found = serviceById(data, serviceKey)
+        if (!found) setMissing(true)
+        else setService(found)
+      })
+      .catch(() => {
+        // A stored catalogue already on screen stays usable offline; with
+        // nothing stored, there is nothing to pay.
+        if (!peekCatalog()) setMissing(true)
+      })
   }, [serviceKey])
 
+  // Keyed on the id, not the object: the refreshed catalogue hands back a new
+  // object for the same biller, and that must not wipe a chosen plan.
+  const serviceId = service?.id ?? null
+  const hasPlans = service ? needsVariation(service) : false
+  const serviceName = service?.name ?? ''
   useEffect(() => {
-    if (!service || !needsVariation(service)) return
-    setBundles(null)
+    if (!serviceId || !hasPlans) return
     setBundleError(null)
-    setPeriod(ALL_PLANS)
-    void variations(service.id)
+    const cached = peekVariations(serviceId)
+    if (cached) setBundles(cached)
+    void variations(serviceId)
       .then(setBundles)
       .catch((e) => {
+        if (cached) return
         setBundles([])
         // The backend says why when it knows why — a biller the aggregator
         // has not switched on for us reads as "not available yet", which is
         // the truth and is more use than "could not load".
-        const message = apiErrorMessage(e, `Could not load bundles for ${service.name}.`)
+        const message = apiErrorMessage(e, `Could not load bundles for ${serviceName}.`)
         setBundleError(message)
         showToast(message, 'danger')
       })
-  }, [service])
+  }, [serviceId, hasPlans, serviceName])
 
   /** The value being bought: the bundle price, or the amount typed in. */
   const payable = useMemo(() => {
@@ -173,29 +228,120 @@ export default function BillFormScreen() {
     if (b.lastAmount > 0) setAmount(String(b.lastAmount))
   }
 
-  const network = needsPhone(service ?? ({ inputs: [] } as unknown as BillService))
-    ? guessNetwork(phone)
-    : null
+  const network = service && needsPhone(service) ? guessNetwork(phone) : null
+  const validPhone = normaliseNgPhone(phone)
 
-  const ready = (() => {
+  /* ── Where the customer is ────────────────────────────────────────────── */
+
+  const whoDone = (() => {
     if (!service) return false
-    if (needsPhone(service) && !normaliseNgPhone(phone)) return false
-    if (needsAccount(service) && account.trim().length < 6) return false
-    if (isVerifiable(service) && !verifiedName) return false
-    if (needsVariation(service) && !variation) return false
-    if (needsAmount(service) && !variation) {
-      if (payable <= 0) return false
-      if (service.min > 0 && payable < service.min) return false
-      if (service.max > 0 && payable > service.max) return false
+    if (needsPhone(service)) return Boolean(validPhone)
+    if (needsAccount(service)) {
+      if (account.trim().length < 6) return false
+      return isVerifiable(service) ? Boolean(verifiedName) : true
     }
+    return true
+  })()
+
+  const amountProblem = (() => {
+    if (!service || variation || !needsAmount(service)) return null
+    if (payable <= 0) return 'empty'
+    if (service.min > 0 && payable < service.min) return `The least you can pay is ${money(service.min)}.`
+    if (service.max > 0 && payable > service.max) return `The most you can pay is ${money(service.max)}.`
+    return null
+  })()
+
+  const whatDone = (() => {
+    if (!service) return false
+    if (needsVariation(service)) return Boolean(variation)
+    if (needsAmount(service)) return amountProblem === null
     return payable > 0
   })()
 
-  const pay = async () => {
-    if (!service || !ready || paying) return
+  const ready = whoDone && whatDone && payable > 0
+  const walletShort = method === 'wallet' && total > 0 && walletBalance < total
 
+  // A wallet that cannot cover this is not a choice, so card is chosen for
+  // the customer rather than leaving a "wallet short" button in their way —
+  // and handed back to the wallet if a cheaper plan brings it within reach.
+  useEffect(() => {
+    if (!balanceKnown || total <= 0) return
     if (method === 'wallet' && walletBalance < total) {
-      showToast(`Your wallet is short by ${money(total - walletBalance)}.`, 'danger')
+      cardChosenForThem.current = true
+      setMethod('paystack')
+    } else if (method === 'paystack' && cardChosenForThem.current && walletBalance >= total) {
+      cardChosenForThem.current = false
+      setMethod('wallet')
+    }
+  }, [balanceKnown, walletBalance, total, method])
+
+  const whoLabel = service
+    ? needsPhone(service)
+      ? 'Phone number'
+      : needsAccount(service)
+        ? service.accountLabel
+        : 'Details'
+    : 'Details'
+  const whatLabel = service && needsVariation(service) ? 'Bundle' : 'Amount'
+
+  const current: StepId = !whoDone ? 'who' : !whatDone ? 'what' : 'pay'
+
+  /** What the footer asks for when the form is not finished. */
+  const nextAction = (() => {
+    if (!service) return ''
+    if (!whoDone) {
+      if (needsPhone(service)) return phone ? 'Check the phone number' : 'Enter a phone number'
+      if (verifying) return 'Checking the account…'
+      if (account.trim().length >= 6 && verifyError) return `Check the ${service.accountLabel.toLowerCase()}`
+      return `Enter the ${service.accountLabel.toLowerCase()}`
+    }
+    if (!whatDone) {
+      if (needsVariation(service)) return 'Choose a bundle'
+      return amountProblem && amountProblem !== 'empty' ? 'Fix the amount' : 'Enter an amount'
+    }
+    return ''
+  })()
+
+  /** Takes the customer to the step that is holding them up. */
+  const goTo = (step: StepId) => {
+    const section = step === 'who' ? whoRef.current : step === 'what' ? whatRef.current : payRef.current
+    section?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setNudged(step)
+    window.setTimeout(() => setNudged(null), 1400)
+    if (step === 'who') {
+      ;(service && needsPhone(service) ? phoneInput : accountInput).current?.focus({ preventScroll: true })
+    } else if (step === 'what' && service && !needsVariation(service)) {
+      amountInput.current?.focus({ preventScroll: true })
+    }
+  }
+
+  // A number that has just become valid: put the keyboard away and bring the
+  // plans up, which is the next thing to do and was hidden under the keyboard.
+  const wasValid = useRef(Boolean(validPhone))
+  useEffect(() => {
+    const valid = Boolean(validPhone)
+    const becameValid = valid && !wasValid.current
+    wasValid.current = valid
+    if (!becameValid || !service || !needsVariation(service) || variation) return
+    if (phone.replace(/\D/g, '').length < 11) return
+    phoneInput.current?.blur()
+    const id = window.setTimeout(
+      () => whatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      180,
+    )
+    return () => window.clearTimeout(id)
+  }, [validPhone, phone, service, variation])
+
+  const pay = async () => {
+    if (!service || paying) return
+    if (!ready) {
+      goTo(current)
+      return
+    }
+
+    if (walletShort) {
+      goTo('pay')
+      showToast(`Your wallet is short by ${money(total - walletBalance)}. Pay by card instead, or top up.`, 'danger')
       return
     }
 
@@ -259,7 +405,8 @@ export default function BillFormScreen() {
       <>
         <AppBar title="Loading" />
         <ScreenBody padded>
-          <Skeleton height={54} radius="var(--radius-md)" />
+          <Skeleton height={44} radius="var(--radius-pill)" style={{ marginTop: 12 }} />
+          <Skeleton height={54} radius="var(--radius-md)" style={{ marginTop: 20 }} />
           <Skeleton height={54} radius="var(--radius-md)" style={{ marginTop: 12 }} />
           <Skeleton height={120} radius="var(--radius-md)" style={{ marginTop: 12 }} />
         </ScreenBody>
@@ -269,11 +416,30 @@ export default function BillFormScreen() {
 
   const relevant = saved.filter((b) => b.serviceKey === service.id).slice(0, 4)
 
+  /** What the footer shows was chosen, once anything has been. */
+  const summary = [
+    variation ? variationHeadline(variation) : payable > 0 ? money(payable) : null,
+    needsPhone(service) ? (validPhone ?? null) : account.trim().length >= 6 ? account.trim() : null,
+  ]
+    .filter(Boolean)
+    .join(' → ')
+
   return (
     <>
       <AppBar title={service.name} subtitle={service.accountLabel} />
 
       <ScreenBody bottomGap="var(--gap-xxl)" padded>
+        {/* ── Where you are ──────────────────────────────────────────── */}
+        <Steps
+          steps={[
+            { id: 'who', label: whoLabel, done: whoDone },
+            { id: 'what', label: whatLabel, done: whatDone },
+            { id: 'pay', label: 'Pay', done: false },
+          ]}
+          current={current}
+          onSelect={goTo}
+        />
+
         {/* ── Saved numbers ──────────────────────────────────────────── */}
         {relevant.length > 0 && (
           <>
@@ -312,34 +478,35 @@ export default function BillFormScreen() {
           </>
         )}
 
-        {/* ── Phone ──────────────────────────────────────────────────── */}
-        {needsPhone(service) && (
-          <Field label="Phone number">
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Enter number"
-              inputMode="tel"
-              aria-label="Phone number"
-              style={inputStyle}
-            />
-            {network && (
-              <p className="t-caption" style={{ margin: '6px 0 0' }}>
-                Looks like {network}
-              </p>
-            )}
-            {phone.length > 3 && !normaliseNgPhone(phone) && (
-              <p className="t-caption" style={{ margin: '6px 0 0', color: 'var(--color-danger)' }}>
-                Enter a valid number
-              </p>
-            )}
-          </Field>
-        )}
+        {/* ── Step 1: who ────────────────────────────────────────────── */}
+        <Section refEl={whoRef} number={1} title={whoLabel} done={whoDone} lit={nudged === 'who'}>
+          {needsPhone(service) && (
+            <>
+              <input
+                ref={phoneInput}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="0801 234 5678"
+                inputMode="tel"
+                autoComplete="tel"
+                aria-label="Phone number"
+                style={inputStyle(Boolean(validPhone))}
+              />
+              {network && (
+                <p className="t-caption" style={{ margin: '6px 0 0' }}>
+                  Looks like {network}
+                </p>
+              )}
+              {phone.replace(/\D/g, '').length >= 11 && !validPhone && (
+                <p className="t-caption" style={{ margin: '6px 0 0', color: 'var(--color-danger)' }}>
+                  That number does not look right. Check it and try again.
+                </p>
+              )}
+            </>
+          )}
 
-        {/* ── Meter type ─────────────────────────────────────────────── */}
-        {needsMeterType(service) && (
-          <Field label="Meter type">
-            <div style={{ display: 'flex', gap: 'var(--gap-sm)' }}>
+          {needsMeterType(service) && (
+            <div style={{ display: 'flex', gap: 'var(--gap-sm)', marginBottom: 'var(--gap-md)' }}>
               {METER_TYPES.map((type) => (
                 <PressScale
                   key={type.id}
@@ -353,9 +520,7 @@ export default function BillFormScreen() {
                     background:
                       meterType === type.id ? 'var(--color-brand-soft)' : 'var(--color-surface)',
                     color:
-                      meterType === type.id
-                        ? 'var(--color-brand-ink)'
-                        : 'var(--color-ink-body)',
+                      meterType === type.id ? 'var(--color-brand-ink)' : 'var(--color-ink-body)',
                     border: `1px solid ${meterType === type.id ? 'var(--color-brand)' : 'var(--color-line)'}`,
                   }}
                 >
@@ -363,74 +528,77 @@ export default function BillFormScreen() {
                 </PressScale>
               ))}
             </div>
-          </Field>
-        )}
+          )}
 
-        {/* ── Account ────────────────────────────────────────────────── */}
-        {needsAccount(service) && (
-          <Field label={service.accountLabel}>
-            <input
-              value={account}
-              onChange={(e) => setAccount(e.target.value)}
-              placeholder={service.accountLabel}
-              inputMode="numeric"
-              aria-label={service.accountLabel}
-              style={inputStyle}
-            />
-            {verifying && (
-              <p
-                className="t-caption"
-                style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 0 0' }}
-              >
-                <LoaderCircle
-                  size={13}
-                  aria-hidden
-                  style={{ animation: 'blorb-spin 900ms linear infinite' }}
-                />
-                Checking that account…
-              </p>
-            )}
-            {verifiedName && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--gap-sm)',
-                  marginTop: 'var(--gap-sm)',
-                  padding: 'var(--gap-sm) var(--gap-md)',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--color-success-soft)',
-                }}
-              >
-                <BadgeCheck size={16} aria-hidden style={{ color: 'var(--color-success)' }} />
-                <span style={{ minWidth: 0 }}>
-                  <span
-                    className="t-caption-sm"
-                    style={{ display: 'block', color: 'var(--color-success)' }}
-                  >
-                    ACCOUNT CONFIRMED
+          {needsAccount(service) && (
+            <>
+              <input
+                ref={accountInput}
+                value={account}
+                onChange={(e) => setAccount(e.target.value)}
+                placeholder={service.accountLabel}
+                inputMode="numeric"
+                aria-label={service.accountLabel}
+                style={inputStyle(whoDone)}
+              />
+              {verifying && (
+                <p
+                  className="t-caption"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 0 0' }}
+                >
+                  <Spinner size={14} color="var(--color-brand)" />
+                  Checking that account…
+                </p>
+              )}
+              {verifiedName && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--gap-sm)',
+                    marginTop: 'var(--gap-sm)',
+                    padding: 'var(--gap-sm) var(--gap-md)',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--color-success-soft)',
+                  }}
+                >
+                  <BadgeCheck size={16} aria-hidden style={{ color: 'var(--color-success)' }} />
+                  <span style={{ minWidth: 0 }}>
+                    <span
+                      className="t-caption-sm"
+                      style={{ display: 'block', color: 'var(--color-success)' }}
+                    >
+                      ACCOUNT CONFIRMED
+                    </span>
+                    <span className="t-label clamp-1" style={{ display: 'block' }}>
+                      {verifiedName}
+                    </span>
                   </span>
-                  <span className="t-label clamp-1" style={{ display: 'block' }}>
-                    {verifiedName}
-                  </span>
-                </span>
-              </div>
-            )}
-            {verifyError && (
-              <p className="t-caption" style={{ margin: '8px 0 0', color: 'var(--color-danger)' }}>
-                {verifyError}
-              </p>
-            )}
-          </Field>
-        )}
+                </div>
+              )}
+              {verifyError && (
+                <p className="t-caption" style={{ margin: '8px 0 0', color: 'var(--color-danger)' }}>
+                  {verifyError}
+                </p>
+              )}
+            </>
+          )}
+        </Section>
 
-        {/* ── Bundles ────────────────────────────────────────────────── */}
+        {/* ── Step 2: what ───────────────────────────────────────────── */}
         {needsVariation(service) && (
-          <Field label="Choose a bundle">
+          <Section
+            refEl={whatRef}
+            number={2}
+            title="Choose a bundle"
+            hint={bundles && bundles.length > 0 ? 'Tap a plan to pick it. The ⓘ shows everything it includes.' : undefined}
+            done={whatDone}
+            lit={nudged === 'what'}
+          >
             {bundles === null ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {[0, 1, 2, 3].map((i) => (
-                  <Skeleton key={i} height={72} radius="var(--radius-md)" />
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} height={84} radius="var(--radius-md)" />
                 ))}
               </div>
             ) : bundles.length === 0 ? (
@@ -444,102 +612,126 @@ export default function BillFormScreen() {
               />
             ) : (
               <>
-              {bundlePeriods(bundles).length > 0 && (
-                <div style={{ marginBottom: 'var(--gap-md)' }}>
-                  <ChipRail
-                    options={bundlePeriods(bundles)}
-                    selected={period}
-                    onSelect={setPeriod}
-                  />
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {bundlesInPeriod(bundles, period).map((bundle) => {
-                  const chosen = variation?.code === bundle.code
-                  return (
-                    // The info button sits beside the tile, not inside it: a
-                    // button inside a button is not valid, and screen readers
-                    // would announce them as one.
-                    <div key={bundle.code} style={{ position: 'relative' }}>
-                      <PressScale
-                        scale={0.96}
-                        onClick={() => setVariation(bundle)}
-                        style={{
-                          display: 'block',
-                          width: '100%',
-                          height: '100%',
-                          padding: 'var(--gap-md)',
-                          paddingRight: 36,
-                          borderRadius: 'var(--radius-md)',
-                          background: chosen ? 'var(--color-brand-soft)' : 'var(--color-surface)',
-                          border: `1px solid ${chosen ? 'var(--color-brand)' : 'var(--color-line)'}`,
-                          textAlign: 'left',
-                        }}
-                      >
-                        <span className="t-h4 clamp-2" style={{ display: 'block' }}>
-                          {variationHeadline(bundle)}
-                        </span>
-                        {variationDetail(bundle) && (
-                          <span className="t-caption-sm clamp-2" style={{ display: 'block' }}>
-                            {variationDetail(bundle)}
-                          </span>
-                        )}
-                        <span
-                          className="t-price-sm"
-                          style={{ display: 'block', marginTop: 6, color: 'var(--color-brand)' }}
+                {bundlePeriods(bundles).length > 0 && (
+                  <div style={{ marginBottom: 'var(--gap-md)', marginInline: 'calc(-1 * var(--gap-page))' }}>
+                    <ChipRail
+                      options={bundlePeriods(bundles)}
+                      selected={period}
+                      onSelect={setPeriod}
+                    />
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {bundlesInPeriod(bundles, period).map((bundle) => {
+                    const chosen = variation?.code === bundle.code
+                    return (
+                      // The info button sits beside the tile, not inside it: a
+                      // button inside a button is not valid, and screen readers
+                      // would announce them as one.
+                      <div key={bundle.code} style={{ position: 'relative' }}>
+                        <PressScale
+                          scale={0.96}
+                          onClick={() => setVariation(chosen ? null : bundle)}
+                          ariaLabel={`${bundle.name}, ${money(bundle.amount)}${chosen ? ', selected' : ''}`}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            height: '100%',
+                            padding: 'var(--gap-md)',
+                            paddingRight: 36,
+                            borderRadius: 'var(--radius-md)',
+                            background: chosen ? 'var(--color-brand-soft)' : 'var(--color-surface)',
+                            border: `1.5px solid ${chosen ? 'var(--color-brand)' : 'var(--color-line)'}`,
+                            boxShadow: chosen ? '0 0 0 3px rgba(31, 119, 241, 0.12)' : undefined,
+                            textAlign: 'left',
+                            transition: 'box-shadow var(--dur-fast) var(--ease-emphasized)',
+                          }}
                         >
-                          {money(bundle.amount)}
-                        </span>
-                      </PressScale>
-                      <button
-                        type="button"
-                        aria-label={`Details for ${bundle.name}`}
-                        onClick={() => setDetails(bundle)}
-                        style={{
-                          position: 'absolute',
-                          top: 4,
-                          right: 4,
-                          display: 'grid',
-                          placeItems: 'center',
-                          width: 32,
-                          height: 32,
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: 'transparent',
-                          color: 'var(--color-ink-muted)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Info size={17} aria-hidden />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-              {/* The chosen plan in full, so nobody pays for a name they
-                  could only read the start of. */}
-              {variation && (
-                <p
-                  className="t-body-sm"
-                  style={{
-                    margin: 'var(--gap-md) 0 0',
-                    padding: 'var(--gap-sm) var(--gap-md)',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--color-brand-softer)',
-                    color: 'var(--color-brand-ink)',
-                  }}
-                >
-                  <strong>Selected:</strong> {variation.name}
-                </p>
-              )}
+                          <span className="t-h4 clamp-2" style={{ display: 'block' }}>
+                            {variationHeadline(bundle)}
+                          </span>
+                          {variationDetail(bundle) && (
+                            <span className="t-caption-sm clamp-2" style={{ display: 'block' }}>
+                              {variationDetail(bundle)}
+                            </span>
+                          )}
+                          <span
+                            className="t-price-sm"
+                            style={{ display: 'block', marginTop: 6, color: 'var(--color-brand)' }}
+                          >
+                            {money(bundle.amount)}
+                          </span>
+                        </PressScale>
+                        {chosen ? (
+                          <span
+                            aria-hidden
+                            style={{
+                              position: 'absolute',
+                              top: 8,
+                              right: 8,
+                              display: 'grid',
+                              placeItems: 'center',
+                              width: 22,
+                              height: 22,
+                              borderRadius: '50%',
+                              background: 'var(--color-brand)',
+                              color: '#fff',
+                              animation: 'blorb-pop var(--dur-normal) var(--ease-springy) both',
+                              pointerEvents: 'none',
+                            }}
+                          >
+                            <Check size={14} strokeWidth={3} />
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            aria-label={`Details for ${bundle.name}`}
+                            onClick={() => setDetails(bundle)}
+                            style={{
+                              position: 'absolute',
+                              top: 4,
+                              right: 4,
+                              display: 'grid',
+                              placeItems: 'center',
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--color-ink-muted)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <Info size={17} aria-hidden />
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {/* The chosen plan in full, so nobody pays for a name they
+                    could only read the start of. */}
+                {variation && (
+                  <p
+                    className="t-body-sm"
+                    style={{
+                      margin: 'var(--gap-md) 0 0',
+                      padding: 'var(--gap-sm) var(--gap-md)',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--color-brand-softer)',
+                      color: 'var(--color-brand-ink)',
+                    }}
+                  >
+                    <strong>Selected:</strong> {variation.name}
+                  </p>
+                )}
               </>
             )}
-          </Field>
+          </Section>
         )}
 
-        {/* ── Amount ─────────────────────────────────────────────────── */}
-        {needsAmount(service) && !variation && (
-          <Field label="Amount">
+        {needsAmount(service) && !variation && !needsVariation(service) && (
+          <Section refEl={whatRef} number={2} title="Amount" done={whatDone} lit={nudged === 'what'}>
             <div
               style={{
                 display: 'flex',
@@ -549,13 +741,14 @@ export default function BillFormScreen() {
                 paddingInline: 'var(--gap-lg)',
                 borderRadius: 'var(--radius-md)',
                 background: 'var(--color-surface)',
-                border: '1px solid var(--color-line-strong)',
+                border: `1.5px solid ${whatDone ? 'var(--color-success)' : 'var(--color-line-strong)'}`,
               }}
             >
               <span className="t-h3" style={{ color: 'var(--color-ink-muted)' }}>
                 ₦
               </span>
               <input
+                ref={amountInput}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))}
                 placeholder="Enter an amount"
@@ -571,72 +764,105 @@ export default function BillFormScreen() {
                 }}
               />
             </div>
-            {(service.min > 0 || service.max > 0) && (
-              <p className="t-caption" style={{ margin: '6px 0 0' }}>
-                {money(service.min)} – {money(service.max)}
-              </p>
+            {service.category === 'airtime' && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-sm)', marginTop: 'var(--gap-md)' }}>
+                {AIRTIME_PRESETS.filter((p) => (!service.min || p >= service.min) && (!service.max || p <= service.max)).map((preset) => (
+                  <PressScale
+                    key={preset}
+                    scale={0.93}
+                    onClick={() => setAmount(String(preset))}
+                    className="t-label"
+                    style={{
+                      height: 38,
+                      paddingInline: 'var(--gap-lg)',
+                      borderRadius: 'var(--radius-pill)',
+                      background: payable === preset ? 'var(--color-brand)' : 'var(--color-surface)',
+                      color: payable === preset ? '#fff' : 'var(--color-ink-body)',
+                      border: `1px solid ${payable === preset ? 'var(--color-brand)' : 'var(--color-line)'}`,
+                    }}
+                  >
+                    {money(preset)}
+                  </PressScale>
+                ))}
+              </div>
             )}
-          </Field>
-        )}
-
-        {/* ── What this costs ────────────────────────────────────────────
-            Shown the moment there is a price, and before the payment method,
-            so the fee is something the customer reads on the way in rather
-            than discovers in their wallet ledger afterwards. */}
-        {fee > 0 && (
-          <div
-            style={{
-              marginTop: 'var(--gap-xl)',
-              padding: 'var(--gap-md) var(--gap-lg)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-line)',
-            }}
-          >
-            <Line label={service.name} value={money(payable)} />
-            <Line label="Transaction fee" value={money(fee)} />
-            <div
+            <p
+              className="t-caption"
               style={{
-                marginTop: 'var(--gap-sm)',
-                paddingTop: 'var(--gap-sm)',
-                borderTop: '1px solid var(--color-line)',
+                margin: '6px 0 0',
+                color: amountProblem && amountProblem !== 'empty' ? 'var(--color-danger)' : undefined,
               }}
             >
-              <Line label="Total" value={money(total)} strong />
-            </div>
-          </div>
+              {amountProblem && amountProblem !== 'empty'
+                ? amountProblem
+                : service.min > 0 || service.max > 0
+                  ? `${money(service.min)} – ${money(service.max)}`
+                  : ''}
+            </p>
+          </Section>
         )}
 
-        {/* ── Payment ────────────────────────────────────────────────── */}
-        <div className="t-overline" style={{ margin: 'var(--gap-xl) 0 var(--gap-sm)' }}>
-          Pay with
-        </div>
-        <PaymentMethodTile
-          method="wallet"
-          selected={method === 'wallet'}
-          onSelect={() => setMethod('wallet')}
-          title="Blorbmart wallet"
-          subtitle={`Balance ${money(walletBalance)}`}
-          disabled={total > 0 && walletBalance < total}
-          disabledReason={
-            total > 0 && walletBalance < total
-              ? `Short by ${money(total - walletBalance)}`
-              : undefined
-          }
-          icon={<Wallet size={20} aria-hidden />}
-        />
-        <div style={{ height: 'var(--gap-sm)' }} />
-        <PaymentMethodTile
-          method="paystack"
-          selected={method === 'paystack'}
-          onSelect={() => setMethod('paystack')}
-          title="Card or transfer"
-          subtitle="Secured by Paystack"
-        />
+        {/* ── Step 3: pay ────────────────────────────────────────────── */}
+        <Section refEl={payRef} number={3} title="Pay with" done={false} lit={nudged === 'pay'}>
+          {/* What this costs, before the payment method, so the fee is read
+              on the way in rather than discovered in the wallet ledger. */}
+          {fee > 0 && (
+            <div
+              style={{
+                marginBottom: 'var(--gap-md)',
+                padding: 'var(--gap-md) var(--gap-lg)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-line)',
+              }}
+            >
+              <Line label={service.name} value={money(payable)} />
+              <Line label="Transaction fee" value={money(fee)} />
+              <div
+                style={{
+                  marginTop: 'var(--gap-sm)',
+                  paddingTop: 'var(--gap-sm)',
+                  borderTop: '1px solid var(--color-line)',
+                }}
+              >
+                <Line label="Total" value={money(total)} strong />
+              </div>
+            </div>
+          )}
 
-        <p className="t-caption" style={{ marginTop: 'var(--gap-lg)', textAlign: 'center' }}>
-          If delivery fails, you are refunded automatically.
-        </p>
+          <PaymentMethodTile
+            method="wallet"
+            selected={method === 'wallet'}
+            onSelect={() => {
+              cardChosenForThem.current = false
+              setMethod('wallet')
+            }}
+            title="Blorbmart wallet"
+            subtitle={`Balance ${money(walletBalance)}`}
+            disabled={total > 0 && walletBalance < total}
+            disabledReason={
+              total > 0 && walletBalance < total
+                ? `Short by ${money(total - walletBalance)}`
+                : undefined
+            }
+            icon={<Wallet size={20} aria-hidden />}
+          />
+          <div style={{ height: 'var(--gap-sm)' }} />
+          <PaymentMethodTile
+            method="paystack"
+            selected={method === 'paystack'}
+            onSelect={() => {
+              cardChosenForThem.current = false
+              setMethod('paystack')
+            }}
+            title="Card or transfer"
+            subtitle="Secured by Paystack"
+          />
+
+          <p className="t-caption" style={{ marginTop: 'var(--gap-lg)', textAlign: 'center' }}>
+            If delivery fails, you are refunded automatically.
+          </p>
+        </Section>
 
         {error && (
           <p
@@ -656,20 +882,54 @@ export default function BillFormScreen() {
         )}
       </ScreenBody>
 
+      {/* ── The footer: what you chose, and the next thing to do ───────── */}
       <StickyFooter>
-        <Button
-          label={
-            total > 0
-              ? `Pay ${money(total)}`
-              : needsVariation(service)
-                ? 'Choose a bundle'
-                : 'Enter an amount'
-          }
-          disabled={!ready}
-          busy={paying}
-          glow
-          onClick={() => void pay()}
-        />
+        {summary && (
+          <div
+            className="blorb-fade-slide-in"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--gap-sm)',
+              marginBottom: 'var(--gap-sm)',
+              ['--fs-y' as string]: '6px',
+            }}
+          >
+            <span className="t-caption clamp-1" style={{ flex: 1, minWidth: 0, color: 'var(--color-ink-body)' }}>
+              {service.name} · {summary}
+            </span>
+            {total > 0 && (
+              <span className="t-price-sm" style={{ flexShrink: 0 }}>
+                {money(total)}
+              </span>
+            )}
+          </div>
+        )}
+        {ready ? (
+          <Button
+            key="pay"
+            label={
+              walletShort
+                ? `Wallet short by ${money(total - walletBalance)}`
+                : method === 'paystack'
+                  ? `Pay ${money(total)} by card or transfer`
+                  : `Pay ${money(total)} from wallet`
+            }
+            busy={paying}
+            glow={!walletShort}
+            kind={walletShort ? 'soft' : 'brand'}
+            className={walletShort ? undefined : 'blorb-cta-ready'}
+            onClick={() => void pay()}
+          />
+        ) : (
+          <Button
+            key="next"
+            label={nextAction}
+            kind="soft"
+            trailing={<ChevronRight size={18} aria-hidden />}
+            onClick={() => goTo(current)}
+          />
+        )}
       </StickyFooter>
 
       {/* ── Plan details ─────────────────────────────────────────────── */}
@@ -723,13 +983,167 @@ export default function BillFormScreen() {
   )
 }
 
-const inputStyle: React.CSSProperties = {
+/** The amounts people actually top up with, as one-tap chips. */
+const AIRTIME_PRESETS = [100, 200, 500, 1000, 2000, 5000]
+
+const inputStyle = (done: boolean): React.CSSProperties => ({
   width: '100%',
   height: 'var(--size-input)',
   paddingInline: 'var(--gap-lg)',
   borderRadius: 'var(--radius-md)',
   background: 'var(--color-surface)',
-  border: '1px solid var(--color-line-strong)',
+  border: `1.5px solid ${done ? 'var(--color-success)' : 'var(--color-line-strong)'}`,
+  transition: 'border-color var(--dur-fast) var(--ease-emphasized)',
+})
+
+/* ── The step tracker ──────────────────────────────────────────────────── */
+
+function Steps({
+  steps,
+  current,
+  onSelect,
+}: {
+  steps: Array<{ id: StepId; label: string; done: boolean }>
+  current: StepId
+  onSelect: (step: StepId) => void
+}) {
+  return (
+    <ol
+      aria-label="Steps"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        listStyle: 'none',
+        margin: 'var(--gap-lg) 0 var(--gap-md)',
+        padding: 0,
+      }}
+    >
+      {steps.map((step, i) => {
+        const active = step.id === current
+        const tone = step.done ? 'var(--color-success)' : active ? 'var(--color-brand)' : 'var(--color-ink-faint)'
+        return (
+          <li key={step.id} style={{ display: 'contents' }}>
+            {i > 0 && (
+              <span
+                aria-hidden
+                style={{
+                  flex: 1,
+                  minWidth: 10,
+                  height: 2,
+                  borderRadius: 2,
+                  background: steps[i - 1].done ? 'var(--color-success)' : 'var(--color-line-strong)',
+                  transition: 'background var(--dur-normal) var(--ease-emphasized)',
+                }}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => onSelect(step.id)}
+              aria-current={active ? 'step' : undefined}
+              className="press"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                flexShrink: 0,
+                maxWidth: '40%',
+                padding: '5px 10px 5px 5px',
+                borderRadius: 'var(--radius-pill)',
+                background: active ? 'var(--color-brand-soft)' : step.done ? 'var(--color-success-soft)' : 'var(--color-surface)',
+                border: `1px solid ${active ? 'var(--color-brand)' : step.done ? 'transparent' : 'var(--color-line)'}`,
+                transition: 'background var(--dur-normal) var(--ease-emphasized)',
+              }}
+            >
+              <span
+                style={{
+                  display: 'grid',
+                  placeItems: 'center',
+                  width: 20,
+                  height: 20,
+                  flexShrink: 0,
+                  borderRadius: '50%',
+                  background: step.done || active ? tone : 'var(--color-surface-sunken)',
+                  color: step.done || active ? '#fff' : 'var(--color-ink-muted)',
+                  fontSize: 11,
+                  fontWeight: 800,
+                }}
+              >
+                {step.done ? <Check size={12} strokeWidth={3.2} aria-hidden /> : i + 1}
+              </span>
+              <span className="t-label-sm clamp-1" style={{ color: step.done ? 'var(--color-success)' : active ? 'var(--color-brand-ink)' : 'var(--color-ink-muted)' }}>
+                {step.label}
+              </span>
+              {step.done && <span className="sr-only">(done)</span>}
+            </button>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/** One numbered section of the form, lit briefly when the footer sends you. */
+function Section({
+  refEl,
+  number,
+  title,
+  hint,
+  done,
+  lit,
+  children,
+}: {
+  refEl: React.RefObject<HTMLDivElement | null>
+  number: number
+  title: string
+  hint?: string
+  done: boolean
+  lit: boolean
+  children: ReactNode
+}) {
+  return (
+    <section
+      ref={refEl}
+      className={lit ? 'blorb-section-lit' : undefined}
+      style={{
+        marginTop: 'var(--gap-lg)',
+        padding: 'var(--gap-md)',
+        marginInline: 'calc(-1 * var(--gap-md))',
+        borderRadius: 'var(--radius-lg)',
+        scrollMarginTop: 'calc(var(--safe-top) + 84px)',
+        scrollMarginBottom: 160,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: hint ? 2 : 'var(--gap-sm)' }}>
+        <span
+          aria-hidden
+          style={{
+            display: 'grid',
+            placeItems: 'center',
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            background: done ? 'var(--color-success)' : 'var(--color-ink)',
+            color: '#fff',
+            fontSize: 11.5,
+            fontWeight: 800,
+            transition: 'background var(--dur-normal) var(--ease-emphasized)',
+          }}
+        >
+          {done ? <Check size={13} strokeWidth={3.2} /> : number}
+        </span>
+        <h2 className="t-h4" style={{ margin: 0 }}>
+          {title}
+        </h2>
+      </div>
+      {hint && (
+        <p className="t-caption" style={{ margin: '0 0 var(--gap-sm) 30px' }}>
+          {hint}
+        </p>
+      )}
+      {children}
+    </section>
+  )
 }
 
 /** One row of the cost breakdown. */
@@ -758,17 +1172,6 @@ function Line({
       <span className={strong ? 't-price-sm' : 't-body-sm'} style={{ flexShrink: 0 }}>
         {value}
       </span>
-    </div>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 'var(--gap-lg)' }}>
-      <div className="t-label-sm" style={{ marginBottom: 6 }}>
-        {label}
-      </div>
-      {children}
     </div>
   )
 }

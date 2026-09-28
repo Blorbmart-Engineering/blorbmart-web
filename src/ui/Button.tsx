@@ -6,7 +6,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import type { CSSProperties, ReactNode } from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { Spinner } from './Loader'
 
 export type ButtonKind = 'brand' | 'appetite' | 'soft' | 'outline' | 'ghost' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -122,11 +122,7 @@ export function Button({
       }}
     >
       {busy ? (
-        <LoaderCircle
-          size={20}
-          aria-hidden
-          style={{ animation: 'blorb-spin 900ms linear infinite' }}
-        />
+        <Spinner size={20} />
       ) : (
         <>
           {icon}

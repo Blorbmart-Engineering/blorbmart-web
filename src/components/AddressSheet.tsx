@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
-import { Check, LoaderCircle, LocateFixed, MapPin, MapPinned } from 'lucide-react'
+import { Check, LocateFixed, MapPin, MapPinned } from 'lucide-react'
 import { auth, db } from '../lib/firebase'
 import {
   addressFromJson,
@@ -17,6 +17,7 @@ import { Button } from '../ui/Button'
 import { PressScale } from '../ui/motion'
 import { Sheet } from '../ui/Sheet'
 import { showToast } from '../ui/Screen'
+import { Spinner } from '../ui/Loader'
 
 export function AddressSheet({
   open,
@@ -142,11 +143,7 @@ export function AddressSheet({
 
         {loading ? (
           <div style={{ display: 'grid', placeItems: 'center', padding: 'var(--gap-xxl)' }}>
-            <LoaderCircle
-              size={24}
-              aria-hidden
-              style={{ animation: 'blorb-spin 900ms linear infinite', color: 'var(--color-brand)' }}
-            />
+            <Spinner size={26} color="var(--color-brand)" label="Loading your addresses" />
           </div>
         ) : saved.length > 0 ? (
           <>
@@ -223,11 +220,7 @@ function ActionRow({
         }}
       >
         {busy ? (
-          <LoaderCircle
-            size={20}
-            aria-hidden
-            style={{ animation: 'blorb-spin 900ms linear infinite' }}
-          />
+          <Spinner size={20} />
         ) : (
           icon
         )}

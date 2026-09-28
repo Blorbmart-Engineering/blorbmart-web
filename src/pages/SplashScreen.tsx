@@ -48,6 +48,10 @@ export default function SplashScreen() {
       // The animation floor keeps the splash from flashing past on a fast
       // connection, which reads as a glitch rather than as speed.
       const floor = new Promise((resolve) => setTimeout(resolve, 1200))
+      // The first screens' code downloads under the splash, so the hand-off
+      // is straight onto a drawn screen rather than onto a loader.
+      void import('./HomeScreen').catch(() => undefined)
+      void import('./WelcomeScreen').catch(() => undefined)
 
       let destination = '/home'
       try {

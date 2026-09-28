@@ -1,28 +1,38 @@
 /**
- * The Blorbmart alert, on the web — the same sound the Android apps play for
- * a new order or a new job (public/sounds/blorbmart-alert.wav).
+ * Blorbmart's sounds on the web — the same files the Android app plays.
+ *
+ *   alert           public/sounds/blorbmart-alert.wav, any foreground push
+ *   orderAccepted   public/sounds/blorbmart_order_accepted.mp3, the kitchen
+ *                   accepted the order
  *
  * Browsers refuse to start sound before the page has had a tap or a key
- * press. `primeAlertSound` plays the file silently on the first one, which
- * unlocks it, so a later order can ring with nobody touching the screen.
+ * press. `primeAlertSound` plays each file silently on the first one, which
+ * unlocks it, so a later push can ring with nobody touching the screen.
  * An alert that repeats stops on the next tap anywhere, or after `repeatFor`.
  *
  * Only the open tab can ring. A closed tab gets the browser's own
  * notification sound, which no web page can change.
  */
-const SRC = '/sounds/blorbmart-alert.wav'
+const SOURCES = {
+  alert: '/sounds/blorbmart-alert.wav',
+  orderAccepted: '/sounds/blorbmart_order_accepted.mp3',
+} as const
 
-let audio: HTMLAudioElement | null = null
+export type AlertSound = keyof typeof SOURCES
+
+const players: Partial<Record<AlertSound, HTMLAudioElement>> = {}
+let current: HTMLAudioElement | null = null
 let unlocked = false
 let stopTimer: number | null = null
 
-function element(): HTMLAudioElement | null {
-  if (!audio && typeof Audio !== 'undefined') {
-    audio = new Audio(SRC)
-    audio.preload = 'auto'
-    audio.volume = 1
+function element(sound: AlertSound): HTMLAudioElement | null {
+  if (!players[sound] && typeof Audio !== 'undefined') {
+    const a = new Audio(SOURCES[sound])
+    a.preload = 'auto'
+    a.volume = 1
+    players[sound] = a
   }
-  return audio
+  return players[sound] ?? null
 }
 
 const GESTURES = ['pointerdown', 'keydown', 'touchstart'] as const
@@ -30,19 +40,26 @@ const GESTURES = ['pointerdown', 'keydown', 'touchstart'] as const
 export function primeAlertSound() {
   if (typeof window === 'undefined' || unlocked) return
   const prime = () => {
-    const a = element()
-    if (!a || unlocked) return
-    a.muted = true
-    a.play()
+    if (unlocked) return
+    const all = (Object.keys(SOURCES) as AlertSound[])
+      .map(element)
+      .filter((a): a is HTMLAudioElement => a !== null)
+    Promise.all(
+      all.map((a) => {
+        a.muted = true
+        return a.play().then(() => {
+          a.pause()
+          a.currentTime = 0
+          a.muted = false
+        })
+      }),
+    )
       .then(() => {
-        a.pause()
-        a.currentTime = 0
-        a.muted = false
         unlocked = true
         for (const g of GESTURES) window.removeEventListener(g, prime, true)
       })
       .catch(() => {
-        a.muted = false
+        for (const a of all) a.muted = false
       })
   }
   for (const g of GESTURES) window.addEventListener(g, prime, { capture: true, passive: true })
@@ -54,23 +71,28 @@ export function stopAlert() {
     stopTimer = null
   }
   window.removeEventListener('pointerdown', stopAlert, true)
-  if (audio) {
-    audio.loop = false
-    audio.pause()
-    audio.currentTime = 0
+  if (current) {
+    current.loop = false
+    current.pause()
+    current.currentTime = 0
   }
 }
 
-/** Rings the alert. With `repeatFor`, it loops until a tap or that many ms. */
-export function playAlert({ repeatFor = 0 }: { repeatFor?: number } = {}) {
-  const a = element()
+/** Plays a sound. With `repeatFor`, it loops until a tap or that many ms. */
+export function playAlert({
+  repeatFor = 0,
+  sound = 'alert',
+}: { repeatFor?: number; sound?: AlertSound } = {}) {
+  const a = element(sound)
   if (!a) return
   stopAlert()
+  current = a
   a.loop = repeatFor > 0
   a.currentTime = 0
   void a.play().catch(() => undefined)
   try {
-    navigator.vibrate?.([700, 250, 700, 250, 700])
+    // Good news gets two short taps; everything else the long alert buzz.
+    navigator.vibrate?.(sound === 'orderAccepted' ? [90, 110, 160] : [700, 250, 700, 250, 700])
   } catch {
     // Blocked before the first gesture.
   }

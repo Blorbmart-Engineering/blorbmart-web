@@ -180,41 +180,88 @@ export function watchActiveOrders(onData: (orders: BlorbOrder[]) => void): () =>
 const HISTORY_OVERFETCH = 3
 
 /**
+ * Every payment status a real order can carry. Drafts are `pending`,
+ * `abandoned` or `failed`; a store that rejected an order leaves it
+ * `refunded`, and that one belongs in the history.
+ */
+const PLACED_PAYMENT_STATES = ['completed', 'paid', 'success', 'successful', 'refunded']
+
+/** The last history drawn, per account, so a return to the tab is instant. */
+let historyMemo: { uid: string; orders: BlorbOrder[] } | null = null
+
+/** The history this session has already drawn, without waiting. */
+export function peekHistory(): BlorbOrder[] | null {
+  const uid = auth.currentUser?.uid
+  return uid && historyMemo?.uid === uid ? historyMemo.orders : null
+}
+
+/**
  * Order history, newest first — real orders only.
  *
- * Unpaid checkout drafts are dropped here rather than in the orders screen, so
- * nothing downstream has to remember the rule.
+ * The server does the filtering. This used to pull three times the page —
+ * 120 whole order documents, items and addresses and all — and throw the
+ * unpaid drafts away on the phone, which on a campus connection was most of
+ * why the orders tab took so long to fill. Asking for placed orders only
+ * uses the (userId, paymentStatus, createdAt) index the live-order card
+ * already relies on.
  *
- * The filter is client-side, which means over-fetching: drafts sit in the same
- * collection, newest-first, so a customer who browsed checkout three times
- * this morning would otherwise push three real orders off the end of the page.
+ * If that index is ever missing, the query fails with failed-precondition;
+ * the old over-fetch takes over rather than leaving the screen on skeletons.
+ * Unpaid checkout drafts are still dropped here, not in the screen, so
+ * nothing downstream has to remember the rule.
  */
 export function watchHistory(
   onData: (orders: BlorbOrder[]) => void,
   limit = 40,
+  onError?: (error: unknown) => void,
 ): () => void {
   const uid = auth.currentUser?.uid
   if (!uid) {
     onData([])
     return () => {}
   }
-  const fetch = Math.min(Math.max(limit * HISTORY_OVERFETCH, limit), 200)
-  return onSnapshot(
+
+  const deliver = (docs: { id: string; data: () => Record<string, unknown> }[]) => {
+    const orders = docs
+      .map((d) => orderFromMap(d.id, d.data()))
+      .filter((o) => !isCheckoutDraft(o))
+      .slice(0, limit)
+    historyMemo = { uid, orders }
+    onData(orders)
+  }
+
+  let stop = onSnapshot(
     fbQuery(
       collection(db, 'orders'),
       where('userId', '==', uid),
+      where('paymentStatus', 'in', PLACED_PAYMENT_STATES),
       orderBy('createdAt', 'desc'),
-      fbLimit(fetch),
+      fbLimit(limit),
     ),
-    (snap) =>
-      onData(
-        snap.docs
-          .map((d) => orderFromMap(d.id, d.data()))
-          .filter((o) => !isCheckoutDraft(o))
-          .slice(0, limit),
-      ),
-    (e) => console.warn('[orders] history failed', e),
+    (snap) => deliver(snap.docs),
+    (e) => {
+      if ((e as { code?: string }).code !== 'failed-precondition') {
+        console.warn('[orders] history failed', e)
+        onError?.(e)
+        return
+      }
+      console.warn('[orders] history index missing, over-fetching instead', e)
+      stop = onSnapshot(
+        fbQuery(
+          collection(db, 'orders'),
+          where('userId', '==', uid),
+          orderBy('createdAt', 'desc'),
+          fbLimit(Math.min(limit * HISTORY_OVERFETCH, 200)),
+        ),
+        (snap) => deliver(snap.docs),
+        (err) => {
+          console.warn('[orders] history failed', err)
+          onError?.(err)
+        },
+      )
+    },
   )
+  return () => stop()
 }
 
 /**

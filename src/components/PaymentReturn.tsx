@@ -10,7 +10,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LoaderCircle } from 'lucide-react'
 import { apiErrorMessage } from '../lib/api'
 import {
   clearPending,
@@ -26,6 +25,7 @@ import { verifyGiftCard } from '../data/giftCards'
 import { useCartStore } from '../store/cartStore'
 import { auth } from '../lib/firebase'
 import { showToast } from '../ui/Screen'
+import { PageLoader } from '../ui/Loader'
 
 /** Settles the payment; returns navigation state for the screen it lands on. */
 async function settle(pending: PendingPayment, reference: string): Promise<unknown> {
@@ -102,32 +102,20 @@ export default function PaymentReturn() {
 
   return (
     <div
-      role="status"
-      aria-live="polite"
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 200,
         display: 'grid',
         placeItems: 'center',
-        background: 'rgba(246, 248, 252, 0.94)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(246, 248, 252, 0.96)',
+        backdropFilter: 'blur(6px)',
       }}
     >
-      <div style={{ textAlign: 'center', padding: 'var(--gap-page)' }}>
-        <LoaderCircle
-          size={34}
-          aria-hidden
-          style={{
-            color: 'var(--color-brand)',
-            animation: 'blorb-spin 900ms linear infinite',
-          }}
-        />
-        <h2 className="t-h3" style={{ margin: 'var(--gap-lg) 0 var(--gap-xs)' }}>
-          Confirming your payment
-        </h2>
-        <p className="t-body-sm" style={{ margin: 0, maxWidth: 280 }}>
-          Do not close this page. This usually takes a few seconds.
+      <div>
+        <PageLoader label="Confirming your payment" fill={false} />
+        <p className="t-body-sm" style={{ margin: '-8px auto 0', maxWidth: 280, textAlign: 'center' }}>
+          Keep this page open. It usually takes a few seconds.
         </p>
       </div>
     </div>

@@ -202,8 +202,14 @@ export async function onForegroundPush(
     return onMessage(getMessaging(app), (payload) => {
       const n = payload.notification
       const data = payload.data ?? {}
-      // The Blorbmart alert, once — the same sound the Android apps play.
-      playAlert()
+      // Once, with the same sound the Android app plays: the kitchen
+      // accepting the order has its own, everything else the Blorbmart alert.
+      playAlert({
+        sound:
+          data.alert === 'order_accepted' || (data.type === 'order' && data.status === 'confirmed')
+            ? 'orderAccepted'
+            : 'alert',
+      })
       handler({
         title: n?.title ?? data.title ?? 'Blorbmart',
         body: n?.body ?? data.body ?? '',
