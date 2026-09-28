@@ -16,6 +16,7 @@ import { getMessaging, getToken, deleteToken, onMessage, isSupported } from 'fir
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { app, auth, db } from './firebase'
 import { API_BASE_URL, APP_VERSION, VAPID_KEY } from './config'
+import { playAlert, primeAlertSound } from './alertSound'
 
 export type PushState =
   | 'unsupported'
@@ -196,10 +197,13 @@ export async function onForegroundPush(
   handler: (payload: { title: string; body: string; link?: string }) => void,
 ): Promise<() => void> {
   if (!(await pushSupported())) return () => {}
+  primeAlertSound()
   try {
     return onMessage(getMessaging(app), (payload) => {
       const n = payload.notification
       const data = payload.data ?? {}
+      // The Blorbmart alert, once — the same sound the Android apps play.
+      playAlert()
       handler({
         title: n?.title ?? data.title ?? 'Blorbmart',
         body: n?.body ?? data.body ?? '',
