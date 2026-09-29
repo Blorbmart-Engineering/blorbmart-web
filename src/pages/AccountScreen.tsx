@@ -29,6 +29,7 @@ import {
   MapPin,
   MessageCircle,
   Receipt,
+  ShieldAlert,
 } from 'lucide-react'
 import { apiErrorMessage } from '../lib/api'
 import { APP_VERSION } from '../lib/config'
@@ -54,6 +55,7 @@ import { FadeSlideIn, PressScale } from '../ui/motion'
 import { ConfirmDialog } from '../ui/Sheet'
 import { AppBar, ScreenBody, showToast } from '../ui/Screen'
 import { CampusSheet } from '../components/AuthWidgets'
+import { EmergencyContactSheet } from '../components/SafetySheet'
 import { SmartImage } from '../ui/SmartImage'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
 
@@ -66,6 +68,7 @@ export default function AccountScreen() {
 
   const [campusOpen, setCampusOpen] = useState(false)
   const [signOutOpen, setSignOutOpen] = useState(false)
+  const [contactOpen, setContactOpen] = useState(false)
   const [pushLabel, setPushLabel] = useState('Order and payment alerts')
   const [canAskPush, setCanAskPush] = useState(false)
   const { canInstall, promptInstall } = useInstallPrompt()
@@ -221,6 +224,19 @@ export default function AccountScreen() {
           />
         </Group>
 
+        {/* ── Safety ─────────────────────────────────────────────────── */}
+        {signedIn && (
+          <Group title="Safety" style={{ marginTop: 'var(--gap-lg)' }}>
+            <Tile
+              icon={<ShieldAlert size={21} aria-hidden />}
+              label="Emergency contact"
+              subtitle="Texted if you press SOS on a delivery"
+              onClick={() => setContactOpen(true)}
+              last
+            />
+          </Group>
+        )}
+
         {/* ── Support ────────────────────────────────────────────────── */}
         <Group title="Support" style={{ marginTop: 'var(--gap-lg)' }}>
           <Tile
@@ -268,6 +284,8 @@ export default function AccountScreen() {
           </p>
         </div>
       </ScreenBody>
+
+      <EmergencyContactSheet open={contactOpen} onClose={() => setContactOpen(false)} />
 
       <CampusSheet
         open={campusOpen}

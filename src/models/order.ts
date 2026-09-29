@@ -259,7 +259,18 @@ export interface BlorbOrder {
   etaMinutes: number
   addressLabel: string
   riderName: string
+  /**
+   * Only while the delivery is moving. The backend removes it from the order
+   * when the delivery is delivered or released, so an old order never carries
+   * a way to call the rider.
+   */
   riderPhone: string
+  /** The rider's verified selfie, when campus ops has checked it. */
+  riderPhotoUrl: string
+  riderVehicle: string
+  riderPlate: string
+  /** Campus ops has matched the rider's face to their ID. */
+  riderVerified: boolean
   cancelReason: string
   itemCount: number
   tracking: DeliveryTracking | null
@@ -305,6 +316,10 @@ export function orderFromMap(id: string, m: Record<string, unknown>): BlorbOrder
     addressLabel,
     riderName: asString(m.riderName),
     riderPhone: asString(m.riderPhone),
+    riderPhotoUrl: asString(m.riderPhotoUrl),
+    riderVehicle: asString(m.riderVehicle),
+    riderPlate: asString(m.riderPlate),
+    riderVerified: asBool(m.riderVerified),
     cancelReason: asString(m.cancelReason),
     itemCount: asInt(
       m.totalItems,

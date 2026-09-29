@@ -5,7 +5,8 @@
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Lock, MessageCircle, Package, Phone, ReceiptText } from 'lucide-react'
+import { BadgeCheck, Lock, MessageCircle, Package, Phone, ReceiptText } from 'lucide-react'
+import { SosCard } from '../components/SafetySheet'
 import { deliveryPin, watchOrder } from '../data/orders'
 import { dayAndTime, money } from '../lib/format'
 import { lineTotal } from '../models/cart'
@@ -33,6 +34,13 @@ const SUPPORT_NUMBER = '2349161234567'
 // rider is on the road, so it loads on demand rather than with the page.
 const LiveRiderMap = lazy(() => import('../components/LiveRiderMap'))
 const MAP_HEIGHT = 240
+
+const VEHICLE_LABEL: Record<string, string> = {
+  foot: 'On foot',
+  bicycle: 'Bicycle',
+  bike: 'Motorcycle',
+  car: 'Car',
+}
 
 export default function TrackOrder() {
   const { orderId = '' } = useParams()
@@ -212,30 +220,60 @@ export default function TrackOrder() {
         )}
 
         {/* ── Rider ──────────────────────────────────────────────────── */}
+        {/* What to check at the door: the face, the plate, and whether campus
+            ops has matched that face to an ID. The Call button exists only
+            while the food is moving — the number is gone once it arrives. */}
         {order.riderName && (
           <FadeSlideIn delay={120}>
             <Card style={{ marginTop: 'var(--gap-lg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-md)' }}>
-                <span
-                  className="t-h3"
-                  style={{
-                    display: 'grid',
-                    placeItems: 'center',
-                    width: 46,
-                    height: 46,
-                    flexShrink: 0,
-                    borderRadius: '50%',
-                    background: 'var(--color-brand-soft)',
-                    color: 'var(--color-brand-ink)',
-                  }}
-                >
-                  {order.riderName.trim()[0]?.toUpperCase() ?? 'R'}
-                </span>
+                {order.riderPhotoUrl ? (
+                  <img
+                    src={order.riderPhotoUrl}
+                    alt={`${order.riderName}, your rider`}
+                    width={52}
+                    height={52}
+                    style={{ width: 52, height: 52, flexShrink: 0, borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <span
+                    className="t-h3"
+                    style={{
+                      display: 'grid',
+                      placeItems: 'center',
+                      width: 46,
+                      height: 46,
+                      flexShrink: 0,
+                      borderRadius: '50%',
+                      background: 'var(--color-brand-soft)',
+                      color: 'var(--color-brand-ink)',
+                    }}
+                  >
+                    {order.riderName.trim()[0]?.toUpperCase() ?? 'R'}
+                  </span>
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="t-h4 clamp-1">{order.riderName}</div>
-                  <div className="t-caption">Your rider</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="t-h4 clamp-1">{order.riderName}</span>
+                    {order.riderVerified && (
+                      <BadgeCheck
+                        size={17}
+                        aria-label="Verified rider"
+                        style={{ color: 'var(--color-success)', flexShrink: 0 }}
+                      />
+                    )}
+                  </div>
+                  <div className="t-caption clamp-1">
+                    {[
+                      order.riderVerified ? 'Verified rider' : 'Your rider',
+                      VEHICLE_LABEL[order.riderVehicle] ?? '',
+                      order.riderPlate,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
                 </div>
-                {order.riderPhone && (
+                {order.riderPhone && !isTerminal(order.stage) && (
                   <IconButton
                     label={`Call ${order.riderName}`}
                     onClick={() => window.location.assign(`tel:${order.riderPhone}`)}
@@ -247,6 +285,13 @@ export default function TrackOrder() {
                 )}
               </div>
             </Card>
+          </FadeSlideIn>
+        )}
+
+        {/* ── Safety ─────────────────────────────────────────────────── */}
+        {!isTerminal(order.stage) && order.paymentState === 'paid' && (
+          <FadeSlideIn delay={140}>
+            <SosCard orderDocId={orderId} />
           </FadeSlideIn>
         )}
 
