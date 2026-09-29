@@ -7,6 +7,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { BadgeCheck, Lock, MessageCircle, Package, Phone, ReceiptText } from 'lucide-react'
 import { SosCard } from '../components/SafetySheet'
+import { RatingCard } from '../components/Social'
 import { deliveryPin, watchOrder } from '../data/orders'
 import { dayAndTime, money } from '../lib/format'
 import { lineTotal } from '../models/cart'
@@ -292,6 +293,13 @@ export default function TrackOrder() {
         {!isTerminal(order.stage) && order.paymentState === 'paid' && (
           <FadeSlideIn delay={140}>
             <SosCard orderDocId={orderId} />
+          </FadeSlideIn>
+        )}
+
+        {/* ── Rating ─────────────────────────────────────────────────── */}
+        {order.stage === 'delivered' && (
+          <FadeSlideIn delay={140}>
+            <RatingCard orderDocId={orderId} hasRider={Boolean(order.riderName)} riderName={order.riderName} />
           </FadeSlideIn>
         )}
 

@@ -37,6 +37,7 @@ import { Sheet } from '../ui/Sheet'
 import { ScreenBody, showToast } from '../ui/Screen'
 import { TransferAccountCard } from '../components/TransferAccountCard'
 import { WalletPinCard } from '../components/WalletPinCard'
+import { PointsCard } from '../components/Social'
 import { GiftCardsPromo } from '../components/gifts/GiftCardsPromo'
 import { Spinner } from '../ui/Loader'
 
@@ -141,6 +142,11 @@ export default function WalletScreen() {
               onClick={() => navigate('/transactions')}
             />
           </div>
+        </div>
+
+        {/* ── Blorb points ───────────────────────────────────────────── */}
+        <div style={{ padding: 'var(--gap-xl) var(--gap-page) 0' }}>
+          <PointsCard />
         </div>
 
         {/* ── Gift cards ─────────────────────────────────────────────── */}

@@ -30,6 +30,7 @@ import {
   MessageCircle,
   Receipt,
   ShieldAlert,
+  Users,
 } from 'lucide-react'
 import { apiErrorMessage } from '../lib/api'
 import { APP_VERSION } from '../lib/config'
@@ -56,6 +57,7 @@ import { ConfirmDialog } from '../ui/Sheet'
 import { AppBar, ScreenBody, showToast } from '../ui/Screen'
 import { CampusSheet } from '../components/AuthWidgets'
 import { EmergencyContactSheet } from '../components/SafetySheet'
+import { JoinGroupSheet, PointsCard } from '../components/Social'
 import { SmartImage } from '../ui/SmartImage'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
 
@@ -69,6 +71,7 @@ export default function AccountScreen() {
   const [campusOpen, setCampusOpen] = useState(false)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
+  const [joinOpen, setJoinOpen] = useState(false)
   const [pushLabel, setPushLabel] = useState('Order and payment alerts')
   const [canAskPush, setCanAskPush] = useState(false)
   const { canInstall, promptInstall } = useInstallPrompt()
@@ -128,6 +131,7 @@ export default function AccountScreen() {
         {signedIn ? (
           <FadeSlideIn>
             <ProfileHeader session={session} />
+            <PointsCard style={{ marginTop: 'var(--gap-lg)' }} />
           </FadeSlideIn>
         ) : (
           <FadeSlideIn>
@@ -203,6 +207,12 @@ export default function AccountScreen() {
               onClick={() => setCampusOpen(true)}
             />
           )}
+          <Tile
+            icon={<Users size={21} aria-hidden />}
+            label="Join a group order"
+            subtitle="One delivery, everyone pays for their own"
+            onClick={() => (signedIn ? setJoinOpen(true) : navigate('/login', { state: { from: '/account' } }))}
+          />
           <Tile
             icon={<Receipt size={21} aria-hidden />}
             label="Pay bills"
@@ -286,6 +296,7 @@ export default function AccountScreen() {
       </ScreenBody>
 
       <EmergencyContactSheet open={contactOpen} onClose={() => setContactOpen(false)} />
+      <JoinGroupSheet open={joinOpen} onClose={() => setJoinOpen(false)} />
 
       <CampusSheet
         open={campusOpen}

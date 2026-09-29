@@ -6,8 +6,8 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { Bike, Clock, Search, ShoppingBasket, Star, UtensilsCrossed } from 'lucide-react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Bike, Clock, Search, ShoppingBasket, Star, Users, UtensilsCrossed } from 'lucide-react'
 import { menuStream, vendor as fetchVendor } from '../data/catalog'
 import { money, titleCase } from '../lib/format'
 import { applySeo, storeSeo } from '../lib/seo'
@@ -25,7 +25,12 @@ import { cartQuantityOf, useCartStore } from '../store/cartStore'
 import { IconButton } from '../ui/Button'
 import { ChipRail, EmptyState, Pill, Skeleton, Stepper } from '../ui/kit'
 import { FadeSlideIn, staggerFor } from '../ui/motion'
-import { AppBar, ScreenBody } from '../ui/Screen'
+import { AppBar, ScreenBody, showToast } from '../ui/Screen'
+import { Button } from '../ui/Button'
+import { groupApi } from '../data/social'
+import { apiErrorMessage } from '../lib/api'
+import { addressToFirestore } from '../models/address'
+import { isSignedIn, useSessionStore } from '../store/sessionStore'
 import { SmartImage } from '../ui/SmartImage'
 import { DishRow } from '../components/CatalogCards'
 import { ItemSheet } from '../components/ItemSheet'
@@ -43,6 +48,37 @@ export default function VendorScreen() {
 
   const lines = useCartStore((s) => s.lines)
   const decrementItem = useCartStore((s) => s.decrementItem)
+  const session = useSessionStore()
+  const [params] = useSearchParams()
+  // Arrived from a group order to pick food: the way back is kept on screen.
+  const groupCode = params.get('group')
+  const [starting, setStarting] = useState(false)
+
+  const startGroup = async () => {
+    if (!store) return
+    if (!isSignedIn(session)) {
+      navigate('/login', { state: { from: `/r/${id}` } })
+      return
+    }
+    if (!session.address) {
+      showToast('Add a delivery address first — the whole group’s food goes there.', 'danger')
+      navigate('/addresses')
+      return
+    }
+    setStarting(true)
+    try {
+      const group = await groupApi.create({
+        storeId: store.id,
+        storeName: store.name,
+        vertical: store.vertical,
+        address: addressToFirestore(session.address),
+      })
+      navigate(`/group/${group.code}`)
+    } catch (e) {
+      showToast(apiErrorMessage(e), 'danger')
+      setStarting(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -202,6 +238,20 @@ export default function VendorScreen() {
                   )}
                 </div>
 
+                {!closed && !groupCode && (
+                  <div style={{ marginTop: 'var(--gap-md)' }}>
+                    <Button
+                      label="Start a group order"
+                      kind="soft"
+                      size="sm"
+                      expand={false}
+                      busy={starting}
+                      icon={<Users size={16} aria-hidden />}
+                      onClick={() => void startGroup()}
+                    />
+                  </div>
+                )}
+
                 {closed && (
                   <div style={{ marginTop: 'var(--gap-md)' }}>
                     <Pill
@@ -220,6 +270,28 @@ export default function VendorScreen() {
             <Skeleton height={132} radius="var(--radius-lg)" />
           )}
         </div>
+
+        {groupCode && (
+          <div style={{ padding: 'var(--gap-lg) var(--gap-page) 0' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--gap-md)',
+                padding: 'var(--gap-md) var(--gap-lg)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-brand-softer)',
+                border: '1px solid var(--color-brand-soft)',
+              }}
+            >
+              <Users size={20} aria-hidden style={{ color: 'var(--color-brand)', flexShrink: 0 }} />
+              <span className="t-body-sm" style={{ flex: 1 }}>
+                Picking for group <b>{groupCode}</b>. Add to your basket, then put it in the group.
+              </span>
+              <Button label="Back" size="sm" expand={false} onClick={() => navigate(`/group/${groupCode}`)} />
+            </div>
+          </div>
+        )}
 
         {/* ── Menu search ─────────────────────────────────────────────── */}
         <div style={{ padding: 'var(--gap-xl) var(--gap-page) var(--gap-md)' }}>
