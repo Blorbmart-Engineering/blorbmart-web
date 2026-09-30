@@ -30,6 +30,7 @@ import {
   MessageCircle,
   Receipt,
   ShieldAlert,
+  Share2,
   Trash2,
   Users,
 } from 'lucide-react'
@@ -61,6 +62,7 @@ import { EmergencyContactSheet, SosCard } from '../components/SafetySheet'
 import { JoinGroupSheet, PointsCard } from '../components/Social'
 import { SmartImage } from '../ui/SmartImage'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
+import { referralApi, type ReferralOverview } from '../data/referral'
 
 const openExternal = (url: string) => window.open(url, '_blank', 'noopener,noreferrer')
 
@@ -76,6 +78,31 @@ export default function AccountScreen() {
   const [pushLabel, setPushLabel] = useState('Order and payment alerts')
   const [canAskPush, setCanAskPush] = useState(false)
   const { canInstall, promptInstall } = useInstallPrompt()
+  const [loadedReferral, setReferral] = useState<ReferralOverview | null>(null)
+
+  const uid = session.user?.uid
+  useEffect(() => {
+    if (!uid) return
+    referralApi.me().then(setReferral).catch(() => {})
+  }, [uid])
+  // Hidden the moment the account signs out, without waiting for a refetch.
+  const referral = signedIn ? loadedReferral : null
+
+  const shareInvite = async () => {
+    if (!referral) return
+    const link = referral.referralLink
+    const text = 'Order food, pay bills and buy event tickets on campus with Blorbmart. Join with my link:'
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Join me on Blorbmart', text, url: link })
+        return
+      }
+    } catch {
+      return
+    }
+    await navigator.clipboard?.writeText(`${text} ${link}`).catch(() => {})
+    showToast('Invite link copied', 'success')
+  }
 
   useEffect(() => {
     void pushState().then((state) => {
@@ -226,6 +253,20 @@ export default function AccountScreen() {
             subtitle="Send one, or redeem a code"
             onClick={() => navigate('/gifts')}
           />
+          {referral && (
+            <Tile
+              icon={<Share2 size={21} aria-hidden />}
+              label="Invite friends"
+              subtitle={
+                referral.rewardsLive && referral.rewardNaira > 0
+                  ? `Earn ₦${referral.rewardNaira.toLocaleString()} for every friend who joins`
+                  : referral.referralCount > 0
+                    ? `${referral.referralCount} joined with your link · code ${referral.referralCode}`
+                    : `Share your link · code ${referral.referralCode}`
+              }
+              onClick={() => void shareInvite()}
+            />
+          )}
           <Tile
             icon={<Bell size={21} aria-hidden />}
             label="Notifications"

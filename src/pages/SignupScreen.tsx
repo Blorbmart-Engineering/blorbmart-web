@@ -12,6 +12,12 @@ import {
 import { universityOptions, type University } from '../data/university'
 import { normaliseNgPhone } from '../lib/format'
 import {
+  cleanReferralCode,
+  clearPendingReferral,
+  pendingReferral,
+  rememberReferral,
+} from '../data/referral'
+import {
   AuthError,
   AuthField,
   CampusPicker,
@@ -39,6 +45,8 @@ export default function SignupScreen() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [campus, setCampus] = useState<University | null>(null)
+  // Filled in when they arrived through a friend's invite link.
+  const [inviteCode, setInviteCode] = useState(pendingReferral)
   const [accepted, setAccepted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -78,6 +86,12 @@ export default function SignupScreen() {
 
     setBusy(true)
     const cleanEmail = email.trim().toLowerCase()
+
+    // Stored now and sent once the account exists (see applyPendingReferral).
+    // Emptying the box means they do not want it, link or no link.
+    const code = cleanReferralCode(inviteCode)
+    if (code) rememberReferral(code)
+    else clearPendingReferral()
 
     try {
       // Two steps on purpose. The account is created first so a slow or
@@ -205,6 +219,18 @@ export default function SignupScreen() {
           </FadeSlideIn>
 
           <FadeSlideIn delay={staggerFor(6)}>
+            <AuthField
+              label="Invite code (optional)"
+              value={inviteCode}
+              onChange={(v) => setInviteCode(cleanReferralCode(v))}
+              placeholder="BLB123ABC"
+              hint={inviteCode ? 'The friend who invited you.' : 'Got one from a friend? Enter it here.'}
+              autoComplete="off"
+              disabled={busy}
+            />
+          </FadeSlideIn>
+
+          <FadeSlideIn delay={staggerFor(7)}>
             <div style={{ margin: 'var(--gap-sm) 0 var(--gap-xxl)' }}>
               <TermsCheckbox checked={accepted} onChange={setAccepted} />
             </div>

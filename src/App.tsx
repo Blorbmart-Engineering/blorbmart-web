@@ -6,6 +6,7 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useParams,
 } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -18,6 +19,7 @@ import { isSignedIn, useSessionStore } from './store/sessionStore'
 import { onForegroundPush } from './lib/push'
 import { showToast } from './ui/Screen'
 import { RouteLoader } from './ui/Loader'
+import { applyPendingReferral, rememberReferral } from './data/referral'
 
 /* ═══════════════════════════════════════════════════════════════════════
    Routes.
@@ -161,9 +163,36 @@ function RouteFallback() {
 function Boot() {
   const start = useSessionStore((s) => s.start)
   useEffect(() => {
+    // `?ref=CODE` on any shop URL counts the same as an /invite link, so a
+    // code can ride on a link to a store or an event as well.
+    rememberReferral(new URLSearchParams(window.location.search).get('ref'))
     start()
   }, [start])
   return null
+}
+
+/**
+ * /invite/:code — a customer's invite link.
+ *
+ * Remembers the code and gets out of the way: a newcomer lands on signup, and
+ * the code is sent once their account exists. Someone already signed in goes
+ * home; the server decides whether their account is new enough to count.
+ */
+function InviteRedirect() {
+  const { code } = useParams()
+  const session = useSessionStore()
+
+  // During render rather than in an effect: <Navigate> below navigates from
+  // its own effect, and this must be stored before that happens.
+  rememberReferral(code)
+
+  const signedIn = session.ready && isSignedIn(session)
+  useEffect(() => {
+    if (signedIn) void applyPendingReferral()
+  }, [signedIn])
+
+  if (!session.ready) return <SplashVisual />
+  return <Navigate to={signedIn ? '/home' : '/signup'} replace />
 }
 
 export default function App() {
@@ -196,6 +225,7 @@ export default function App() {
             <Route path="/signup" element={<SignupScreen />} />
             <Route path="/verify" element={<OtpScreen />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/invite/:code" element={<InviteRedirect />} />
 
             {/* ── Discovery ──────────────────────────────── */}
             <Route path="/home" element={<Shell><HomeScreen /></Shell>} />

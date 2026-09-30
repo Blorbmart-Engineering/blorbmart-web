@@ -27,6 +27,7 @@ import { setCampus, setUserLocation } from '../data/catalog'
 import { clearSearchCache } from '../data/search'
 import { useCartStore } from './cartStore'
 import { registerPushToken, removePushToken } from '../lib/push'
+import { applyPendingReferral } from '../data/referral'
 
 const ADDRESS_KEY = 'blorb_selected_address_v1'
 
@@ -209,6 +210,10 @@ function listenToProfile(
     (snap) => {
       const previousCampus = catalogCampusId(get())
       set({ profile: snap.data() ?? {} })
+
+      // An invite link opened before signing in. Sent only now that the
+      // profile exists — see applyPendingReferral.
+      if (snap.exists()) void applyPendingReferral()
 
       // Pushed rather than pulled, for the same reason the delivery address
       // is: both hold a filtered index, so they have to be told when the
