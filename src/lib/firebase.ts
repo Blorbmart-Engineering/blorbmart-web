@@ -5,13 +5,16 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore'
-import { FIREBASE_CONFIG, GOOGLE_AUTH_HOSTS, IS_DEV } from './config'
+import { FIREBASE_CONFIG, GOOGLE_AUTH_HOSTS } from './config'
 
 const host = typeof location === 'undefined' ? '' : location.hostname
 const servesOwnAuthPages = GOOGLE_AUTH_HOSTS.includes(host)
 
-/** Whether this page may offer "Continue with Google". See GOOGLE_AUTH_HOSTS. */
-export const GOOGLE_SIGN_IN_ENABLED = servesOwnAuthPages || IS_DEV
+/**
+ * Whether this page may offer "Continue with Google". Suspended: with
+ * GOOGLE_AUTH_HOSTS empty this is false everywhere, the dev server included.
+ */
+export const GOOGLE_SIGN_IN_ENABLED = servesOwnAuthPages
 
 export const app = initializeApp({
   ...FIREBASE_CONFIG,

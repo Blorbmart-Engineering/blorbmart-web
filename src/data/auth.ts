@@ -27,7 +27,7 @@ import {
   setDoc,
   writeBatch,
 } from 'firebase/firestore'
-import { auth, db } from '../lib/firebase'
+import { GOOGLE_SIGN_IN_ENABLED, auth, db } from '../lib/firebase'
 import { API_BASE_URL } from '../lib/config'
 
 const BASE = `${API_BASE_URL}/api/vendor-auth`
@@ -441,7 +441,9 @@ export function authErrorMessage(error: unknown): string {
     case 'auth/user-not-found':
     case 'auth/wrong-password':
     case 'auth/invalid-credential':
-      return 'Email or password is incorrect. If you usually continue with Google, use that instead.'
+      return GOOGLE_SIGN_IN_ENABLED
+        ? 'Email or password is incorrect. If you usually continue with Google, use that instead.'
+        : 'Email or password is incorrect.'
     case 'auth/popup-blocked':
       return 'Your browser blocked the Google window. Allow pop-ups for this site, then try again.'
     case 'auth/account-exists-with-different-credential':
