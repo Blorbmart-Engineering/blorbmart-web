@@ -2,7 +2,7 @@
    SOS on the tracking screen, and the emergency contact on Account.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { CheckCircle2, MapPin, Phone, ShieldAlert } from 'lucide-react'
 import {
   emergencyContact,
@@ -14,7 +14,7 @@ import {
   type SosState,
 } from '../data/safety'
 import { apiErrorMessage } from '../lib/api'
-import { Button } from '../ui/Button'
+import { Button, IconButton } from '../ui/Button'
 import { Card } from '../ui/kit'
 import { showToast } from '../ui/Screen'
 import { Sheet } from '../ui/Sheet'
@@ -23,14 +23,22 @@ import { Field } from './AddressSheet'
 const call = (phone: string) => window.location.assign(`tel:${phone.replace(/\s+/g, '')}`)
 
 /**
- * "Feel unsafe?" on an order in progress.
+ * "Feel unsafe?" — on an order in progress, and on its own on the Account
+ * screen for personal safety with no order at all. Without an order the alert
+ * still carries who and where; it just has no rider or kitchen attached.
  *
  * Two taps, not one: the card opens a sheet and the sheet sends. A single tap
  * on a card this close to the rider's Call button would page campus ops by
  * accident — and false alarms are how a real one gets ignored. The sheet puts
  * 112 right beside it, because a message to ops is not an ambulance.
  */
-export function SosCard({ orderDocId }: { orderDocId: string }) {
+export function SosCard({
+  orderDocId = null,
+  style,
+}: {
+  orderDocId?: string | null
+  style?: CSSProperties
+}) {
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<SosState | null>(null)
 
@@ -50,7 +58,7 @@ export function SosCard({ orderDocId }: { orderDocId: string }) {
   return (
     <>
       <Card
-        style={{ marginTop: 'var(--gap-lg)' }}
+        style={style ?? { marginTop: 'var(--gap-lg)' }}
         color={live ? 'var(--color-danger-soft)' : undefined}
         border={live ? 'var(--color-danger)' : undefined}
       >
@@ -63,7 +71,9 @@ export function SosCard({ orderDocId }: { orderDocId: string }) {
                 ? state.status === 'acknowledged'
                   ? 'Campus ops has seen it and is on it.'
                   : 'Campus ops is being alerted.'
-                : 'Alert campus ops with your location.'}
+                : orderDocId
+                  ? 'Alert campus ops with your location.'
+                  : 'Anywhere on campus — alert ops and your emergency contact.'}
             </div>
           </div>
           <Button
@@ -87,6 +97,42 @@ export function SosCard({ orderDocId }: { orderDocId: string }) {
   )
 }
 
+/**
+ * The shield beside the notification bell on Home: SOS one tap from the first
+ * screen, for anyone on campus, with or without an order. Solid red while an
+ * alert is live, so it doubles as the way back to it.
+ */
+export function SosShortcut() {
+  const [open, setOpen] = useState(false)
+  const [state, setState] = useState<SosState | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void mySos().then((s) => {
+      if (!cancelled && s && s.status !== 'resolved') setState(s)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const live = state != null && state.status !== 'resolved'
+
+  return (
+    <>
+      <IconButton
+        label={live ? 'Your SOS is active' : 'SOS — get help'}
+        onClick={() => setOpen(true)}
+        background={live ? 'var(--color-danger)' : 'rgba(255,255,255,0.2)'}
+        color="#fff"
+      >
+        <ShieldAlert size={20} aria-hidden />
+      </IconButton>
+      <SosSheet open={open} onClose={() => setOpen(false)} orderDocId={null} state={state} onState={setState} />
+    </>
+  )
+}
+
 function SosSheet({
   open,
   onClose,
@@ -96,7 +142,7 @@ function SosSheet({
 }: {
   open: boolean
   onClose: () => void
-  orderDocId: string
+  orderDocId: string | null
   state: SosState | null
   onState: (s: SosState | null) => void
 }) {
@@ -155,7 +201,7 @@ function SosSheet({
           <p className="t-body" style={{ margin: '0 0 var(--gap-lg)' }}>
             {state.status === 'acknowledged'
               ? 'Campus operations has your alert and is on it. Stay somewhere public and keep your phone on.'
-              : 'Campus operations and the Blorbmart team have your location, your order and your rider’s details. Stay somewhere public and keep your phone on.'}
+              : `Campus operations and the Blorbmart team have your location${orderDocId ? ', your order and your rider’s details' : ''}. Stay somewhere public and keep your phone on.`}
           </p>
 
           <div style={{ display: 'grid', gap: 'var(--gap-sm)' }}>
@@ -203,11 +249,12 @@ function SosSheet({
       ) : (
         <>
           <p className="t-body" style={{ margin: '0 0 var(--gap-lg)' }}>
-            This alerts your campus operations team and Blorbmart right away, with where you are, this order and your
-            rider’s details. If you are in immediate danger, call {emergency} first.
+            This alerts your campus operations team and Blorbmart right away with where you are
+            {orderDocId ? ', this order and your rider’s details' : ''}, and texts your emergency contact if you have
+            one. If you are in immediate danger, call {emergency} first.
           </p>
 
-          <Field label="What’s happening? (optional)" value={note} onChange={setNote} placeholder="e.g. Rider is being aggressive" />
+          <Field label="What’s happening? (optional)" value={note} onChange={setNote} placeholder={orderDocId ? 'e.g. Rider is being aggressive' : 'e.g. Someone is following me near Jaja Hall'} />
 
           <div style={{ display: 'grid', gap: 'var(--gap-sm)' }}>
             <Button

@@ -56,7 +56,7 @@ import { FadeSlideIn, PressScale } from '../ui/motion'
 import { ConfirmDialog } from '../ui/Sheet'
 import { AppBar, ScreenBody, showToast } from '../ui/Screen'
 import { CampusSheet } from '../components/AuthWidgets'
-import { EmergencyContactSheet } from '../components/SafetySheet'
+import { EmergencyContactSheet, SosCard } from '../components/SafetySheet'
 import { JoinGroupSheet, PointsCard } from '../components/Social'
 import { SmartImage } from '../ui/SmartImage'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
@@ -236,15 +236,19 @@ export default function AccountScreen() {
 
         {/* ── Safety ─────────────────────────────────────────────────── */}
         {signedIn && (
-          <Group title="Safety" style={{ marginTop: 'var(--gap-lg)' }}>
-            <Tile
-              icon={<ShieldAlert size={21} aria-hidden />}
-              label="Emergency contact"
-              subtitle="Texted if you press SOS on a delivery"
-              onClick={() => setContactOpen(true)}
-              last
-            />
-          </Group>
+          <>
+            <Group title="Safety" style={{ marginTop: 'var(--gap-lg)' }}>
+              <Tile
+                icon={<ShieldAlert size={21} aria-hidden />}
+                label="Emergency contact"
+                subtitle="Texted whenever you press SOS"
+                onClick={() => setContactOpen(true)}
+                last
+              />
+            </Group>
+            {/* Personal safety, with or without an order in progress. */}
+            <SosCard style={{ marginTop: 'var(--gap-sm)' }} />
+          </>
         )}
 
         {/* ── Support ────────────────────────────────────────────────── */}

@@ -37,6 +37,7 @@ import {
   useSessionStore,
 } from '../store/sessionStore'
 import { IconButton } from '../ui/Button'
+import { SosShortcut } from './SafetySheet'
 import { Skeleton } from '../ui/kit'
 import { FadeSlideIn, LivePulse, PressScale, staggerFor, SwapIn } from '../ui/motion'
 import { RailCardSkeleton, VendorCardSkeleton } from './CatalogCards'
@@ -224,6 +225,7 @@ export function HomeHeader({
             </span>
           </PressScale>
 
+          {isSignedIn(session) && <SosShortcut />}
           <NotificationBell onClick={onNotifications} />
         </div>
 
