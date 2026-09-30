@@ -1,16 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   Create an account — a port of lib/features/auth/sign_up_screen.dart.
+   Finish signing up — the second half of "Continue with Google".
+
+   Google supplies a name and a proven email. It does not supply the phone
+   number a rider calls or the campus the catalogue is filtered by, and an
+   account without those cannot order. So a Google account Blorbmart has not
+   seen before stops here once, and its documents are written when it leaves.
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import {
-  authErrorMessage,
-  initRegistration,
-  sendOtp,
-} from '../data/auth'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { authErrorMessage, completeGoogleProfile, splitDisplayName } from '../data/auth'
 import { universityOptions, type University } from '../data/university'
-import { normaliseNgPhone } from '../lib/format'
+import { asString, normaliseNgPhone } from '../lib/format'
 import {
   cleanReferralCode,
   clearPendingReferral,
@@ -23,7 +24,8 @@ import {
   CampusPicker,
   TermsCheckbox,
 } from '../components/AuthWidgets'
-import { GoogleSignIn } from '../components/GoogleSignIn'
+import { SplashVisual } from '../components/SplashVisual'
+import { isSignedIn, sessionEmail, useSessionStore } from '../store/sessionStore'
 import { Button } from '../ui/Button'
 import { AppBar, ScreenBody } from '../ui/Screen'
 import { FadeSlideIn, staggerFor } from '../ui/motion'
@@ -31,38 +33,41 @@ import { FadeSlideIn, staggerFor } from '../ui/motion'
 interface Errors {
   firstName?: string
   lastName?: string
-  email?: string
   phone?: string
-  password?: string
   campus?: string
 }
 
-export default function SignupScreen() {
-  const navigate = useNavigate()
+export default function FinishSignupScreen() {
+  const location = useLocation()
+  const session = useSessionStore()
+  const from = (location.state as { from?: string } | null)?.from ?? '/home'
 
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [email, setEmail] = useState('')
+  if (!session.ready) return <SplashVisual />
+  if (!isSignedIn(session)) return <Navigate to="/login" replace />
+  // Already a full account — including the moment the form's own save lands.
+  // There is nothing to finish.
+  if (asString(session.profile.role)) return <Navigate to={from} replace />
+
+  // Mounted only once the session is known, so the form can start from the
+  // name Google gave: on a reload that arrives after the first paint.
+  return <FinishForm from={from} />
+}
+
+function FinishForm({ from }: { from: string }) {
+  const navigate = useNavigate()
+  const session = useSessionStore()
+
+  const google = splitDisplayName(session.user?.displayName)
+  const [firstName, setFirstName] = useState(google.firstName)
+  const [lastName, setLastName] = useState(google.lastName)
   const [phone, setPhone] = useState('')
-  const [password, setPassword] = useState('')
   const [campus, setCampus] = useState<University | null>(null)
-  // Filled in when they arrived through a friend's invite link.
   const [inviteCode, setInviteCode] = useState(pendingReferral)
   const [accepted, setAccepted] = useState(false)
   const [busy, setBusy] = useState(false)
-  // Google's window is open: the form waits, but only its own button spins.
-  const [googleBusy, setGoogleBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [errors, setErrors] = useState<Errors>({})
 
-  /**
-   * Pulls the campus list into the session cache while the person is still
-   * typing their name, so the picker opens instantly rather than spinning.
-   *
-   * Fire-and-forget on purpose. The picker fetches and retries on its own, so
-   * a failure here costs nothing and must not put an error on a form the
-   * person has not finished filling in.
-   */
   useEffect(() => {
     void universityOptions().catch(() => [])
   }, [])
@@ -71,9 +76,7 @@ export default function SignupScreen() {
     const next: Errors = {}
     if (firstName.trim().length < 2) next.firstName = 'Enter your first name.'
     if (lastName.trim().length < 2) next.lastName = 'Enter your last name.'
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) next.email = 'Enter a valid email address.'
     if (!normaliseNgPhone(phone)) next.phone = 'Enter a valid Nigerian phone number.'
-    if (password.length < 8) next.password = 'At least 8 characters.'
     if (!campus) next.campus = 'Choose your school.'
     setErrors(next)
     return Object.keys(next).length === 0
@@ -87,66 +90,60 @@ export default function SignupScreen() {
       return
     }
 
-    setBusy(true)
-    const cleanEmail = email.trim().toLowerCase()
-
-    // Stored now and sent once the account exists (see applyPendingReferral).
-    // Emptying the box means they do not want it, link or no link.
+    // Stored now and sent once the profile exists (see applyPendingReferral).
     const code = cleanReferralCode(inviteCode)
     if (code) rememberReferral(code)
     else clearPendingReferral()
 
+    setBusy(true)
     try {
-      // Two steps on purpose. The account is created first so a slow or
-      // sleeping backend cannot destroy details the person already typed; the
-      // code is then sent separately and can be retried on its own.
-      await initRegistration({
-        email: cleanEmail,
-        password,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        phone: phone.trim(),
+      await completeGoogleProfile({
+        firstName,
+        lastName,
+        phone,
         universityId: campus?.id ?? '',
         universityName: campus?.name ?? '',
       })
-
-      try {
-        await sendOtp(cleanEmail)
-      } catch {
-        // The account exists either way — the OTP screen can resend.
-      }
-
-      navigate('/verify', { state: { email: cleanEmail }, replace: true })
+      navigate(from, { replace: true })
     } catch (e) {
-      setError(authErrorMessage(e))
-    } finally {
+      setError(
+        (e as { code?: string })?.code === 'permission-denied'
+          ? 'We could not save your details. Sign out and try again, or message support.'
+          : authErrorMessage(e),
+      )
       setBusy(false)
     }
   }
 
+  const useAnotherAccount = () => {
+    void session.signOut().then(() => navigate('/login', { replace: true }))
+  }
+
   return (
     <>
-      <AppBar onBack={() => navigate('/welcome')} />
+      <AppBar onBack={useAnotherAccount} />
       <ScreenBody padded>
         <FadeSlideIn>
           <h1 className="t-display-sm" style={{ margin: '0 0 var(--gap-xs)' }}>
-            Create your account
+            Almost there
           </h1>
-          <p className="t-body" style={{ margin: '0 0 var(--gap-xxl)' }}>
-            It takes under a minute. Then we deliver.
+          <p className="t-body" style={{ margin: '0 0 var(--gap-sm)' }}>
+            Two things Google could not tell us, then you are in.
+          </p>
+          <p className="t-body-sm" style={{ margin: '0 0 var(--gap-xxl)' }}>
+            Signed in as <strong>{sessionEmail(session)}</strong>.{' '}
+            <button
+              type="button"
+              onClick={useAnotherAccount}
+              disabled={busy}
+              style={{ color: 'var(--color-brand)', fontWeight: 700 }}
+            >
+              Use another account
+            </button>
           </p>
         </FadeSlideIn>
 
         <AuthError message={error} />
-
-        <FadeSlideIn>
-          <GoogleSignIn
-            divider="or sign up with email"
-            disabled={busy}
-            onError={setError}
-            onBusyChange={setGoogleBusy}
-          />
-        </FadeSlideIn>
 
         <form
           onSubmit={(e) => {
@@ -155,8 +152,6 @@ export default function SignupScreen() {
           }}
         >
           <div style={{ display: 'flex', gap: 'var(--gap-md)' }}>
-            {/* minWidth: a flex child will not shrink below its input's
-                natural width without it, and the row ran off the screen. */}
             <FadeSlideIn delay={staggerFor(0)} style={{ flex: 1, minWidth: 0 }}>
               <AuthField
                 label="First name"
@@ -183,21 +178,6 @@ export default function SignupScreen() {
 
           <FadeSlideIn delay={staggerFor(2)}>
             <AuthField
-              label="Email address"
-              value={email}
-              onChange={setEmail}
-              placeholder="you@example.com"
-              hint="We send your order receipts here."
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              disabled={busy}
-              error={errors.email}
-            />
-          </FadeSlideIn>
-
-          <FadeSlideIn delay={staggerFor(3)}>
-            <AuthField
               label="Phone number"
               value={phone}
               onChange={setPhone}
@@ -210,7 +190,7 @@ export default function SignupScreen() {
             />
           </FadeSlideIn>
 
-          <FadeSlideIn delay={staggerFor(4)}>
+          <FadeSlideIn delay={staggerFor(3)}>
             <CampusPicker
               value={campus}
               onChange={setCampus}
@@ -219,20 +199,7 @@ export default function SignupScreen() {
             />
           </FadeSlideIn>
 
-          <FadeSlideIn delay={staggerFor(5)}>
-            <AuthField
-              label="Password"
-              value={password}
-              onChange={setPassword}
-              placeholder="At least 8 characters"
-              type="password"
-              autoComplete="new-password"
-              disabled={busy}
-              error={errors.password}
-            />
-          </FadeSlideIn>
-
-          <FadeSlideIn delay={staggerFor(6)}>
+          <FadeSlideIn delay={staggerFor(4)}>
             <AuthField
               label="Invite code (optional)"
               value={inviteCode}
@@ -244,22 +211,12 @@ export default function SignupScreen() {
             />
           </FadeSlideIn>
 
-          <FadeSlideIn delay={staggerFor(7)}>
+          <FadeSlideIn delay={staggerFor(5)}>
             <div style={{ margin: 'var(--gap-sm) 0 var(--gap-xxl)' }}>
               <TermsCheckbox checked={accepted} onChange={setAccepted} />
             </div>
 
-            <Button label="Create account" type="submit" busy={busy} disabled={googleBusy} glow />
-
-            <p
-              className="t-body-sm"
-              style={{ textAlign: 'center', margin: 'var(--gap-xl) 0 0' }}
-            >
-              Already have an account?{' '}
-              <Link to="/login" style={{ color: 'var(--color-brand)', fontWeight: 700 }}>
-                Sign in
-              </Link>
-            </p>
+            <Button label="Finish" type="submit" busy={busy} glow />
           </FadeSlideIn>
         </form>
       </ScreenBody>

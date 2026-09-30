@@ -5,9 +5,21 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore'
-import { FIREBASE_CONFIG } from './config'
+import { FIREBASE_CONFIG, GOOGLE_AUTH_HOSTS, IS_DEV } from './config'
 
-export const app = initializeApp(FIREBASE_CONFIG)
+const host = typeof location === 'undefined' ? '' : location.hostname
+const servesOwnAuthPages = GOOGLE_AUTH_HOSTS.includes(host)
+
+/** Whether this page may offer "Continue with Google". See GOOGLE_AUTH_HOSTS. */
+export const GOOGLE_SIGN_IN_ENABLED = servesOwnAuthPages || IS_DEV
+
+export const app = initializeApp({
+  ...FIREBASE_CONFIG,
+  // Google's sign-in pages are loaded from the auth domain. On a host that
+  // serves them itself that is this host, so nothing depends on reaching
+  // firebaseapp.com from the customer's network.
+  authDomain: servesOwnAuthPages ? host : FIREBASE_CONFIG.authDomain,
+})
 
 export const auth = getAuth(app)
 

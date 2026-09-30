@@ -53,6 +53,14 @@
       "destination": "/api/share?kind=treat&id=:id"
     },
     {
+      "source": "/__/auth/:path*",
+      "destination": "https://blorbmart-b29b7.firebaseapp.com/__/auth/:path*"
+    },
+    {
+      "source": "/__/firebase/:path*",
+      "destination": "https://blorbmart-b29b7.firebaseapp.com/__/firebase/:path*"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

@@ -17,7 +17,7 @@
    to, so every /api call goes to the network and fails honestly.
    ═══════════════════════════════════════════════════════════════════════ */
 
-const VERSION = 'v1'
+const VERSION = 'v2'
 const SHELL_CACHE = `blorb-shell-${VERSION}`
 const ASSET_CACHE = `blorb-assets-${VERSION}`
 
@@ -79,8 +79,12 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache the API, Firestore, or auth. A stale price or order status is
   // worse than an error message.
+  // /__/ is Firebase's own sign-in pages, passed through to Firebase by the
+  // host. Cached, they would go stale — and the handler page, being a
+  // navigation, would be stored as the app's offline shell.
   if (
     url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/__/') ||
     url.hostname.includes('onrender.com') ||
     url.hostname.includes('googleapis.com') ||
     url.hostname.includes('firebaseio.com') ||

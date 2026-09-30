@@ -9,11 +9,24 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import {
+  GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  getRedirectResult,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  type User,
   type UserCredential,
 } from 'firebase/auth'
-import { deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore'
+import {
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocFromServer,
+  serverTimestamp,
+  setDoc,
+  writeBatch,
+} from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
 import { API_BASE_URL } from '../lib/config'
 
@@ -180,6 +193,216 @@ export function login(email: string, password: string): Promise<UserCredential> 
   return signInWithEmailAndPassword(auth, email.trim(), password)
 }
 
+/* ── Google ───────────────────────────────────────────────────────────── */
+
+/**
+ * The app this page is open inside, when it is one Google refuses to sign
+ * people in from. Instagram, Facebook and the like open links in a browser of
+ * their own, and Google answers it with a bare "disallowed_useragent" page —
+ * so the person is told to open the link in a real browser instead.
+ */
+export function embeddedBrowser(): string | null {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  if (/FBAN|FBAV|FB_IAB/.test(ua)) return 'Facebook'
+  if (/Instagram/.test(ua)) return 'Instagram'
+  if (/TikTok|musical_ly|BytedanceWebview/i.test(ua)) return 'TikTok'
+  if (/Snapchat/.test(ua)) return 'Snapchat'
+  if (/LinkedInApp/.test(ua)) return 'LinkedIn'
+  if (/Twitter/.test(ua)) return 'X'
+  if (/\bLine\//.test(ua)) return 'Line'
+  // Any other Android app showing the page in a view of its own.
+  if (/; wv\)/.test(ua)) return 'this app'
+  return null
+}
+
+/**
+ * Opens Google's account chooser and signs in with whichever account is
+ * picked. An email that already has a password account lands in that same
+ * account — Firebase keeps one account per address.
+ *
+ * `hasProfile` is false for somebody Blorbmart has never seen: Google gives a
+ * name and an email, but not the phone number a rider calls or the campus the
+ * catalogue is filtered by, so the caller sends them to finish signing up.
+ *
+ * Nothing is awaited before the popup opens. A browser only allows a popup
+ * straight from a tap; any wait in between and it is blocked.
+ */
+export async function signInWithGoogle(): Promise<{ user: User; hasProfile: boolean }> {
+  const { user } = await signInWithPopup(auth, googleProvider())
+  return { user, hasProfile: await hasProfile(user.uid) }
+}
+
+function googleProvider(): GoogleAuthProvider {
+  const provider = new GoogleAuthProvider()
+  // Always show the chooser: a shared phone must not sign the next person
+  // into the last person's account.
+  provider.setCustomParameters({ prompt: 'select_account' })
+  return provider
+}
+
+const REDIRECT_KEY = 'blorb_google_redirect_v1'
+
+/** A browser that will not open the window at all, tap or no tap. */
+export function popupUnavailable(error: unknown): boolean {
+  const code = (error as { code?: string })?.code ?? ''
+  return (
+    code === 'auth/popup-blocked' ||
+    code === 'auth/operation-not-supported-in-this-environment'
+  )
+}
+
+/**
+ * The same sign-in without a window: the whole page goes to Google and comes
+ * back. For the browsers that refuse a popup outright — an installed app on
+ * an iPhone is one. `from` is kept for the return, since the page reloads.
+ */
+export async function redirectToGoogle(from: string): Promise<void> {
+  try {
+    sessionStorage.setItem(REDIRECT_KEY, from)
+  } catch {
+    /* without it the return lands on home, which is fine */
+  }
+  await signInWithRedirect(auth, googleProvider())
+}
+
+/**
+ * Picks up a sign-in that left through `redirectToGoogle`. Null when this
+ * page load is not a return from Google, and asked only when one is expected:
+ * the check itself loads Firebase's sign-in frame.
+ */
+export function googleRedirectResult(): Promise<GoogleReturn | null> {
+  // One answer per page load, however many times it is asked: the note left
+  // for the return is read once and then gone.
+  redirectReturn ??= readRedirectReturn()
+  return redirectReturn
+}
+
+interface GoogleReturn {
+  user: User
+  hasProfile: boolean
+  from: string
+}
+
+let redirectReturn: Promise<GoogleReturn | null> | null = null
+
+async function readRedirectReturn(): Promise<GoogleReturn | null> {
+  let from: string | null = null
+  try {
+    from = sessionStorage.getItem(REDIRECT_KEY)
+    sessionStorage.removeItem(REDIRECT_KEY)
+  } catch {
+    from = null
+  }
+  if (from == null) return null
+
+  const result = await getRedirectResult(auth)
+  if (!result) return null
+  return { user: result.user, hasProfile: await hasProfile(result.user.uid), from }
+}
+
+/**
+ * Whether the account has its users document. Asked of the server: the local
+ * cache has never seen a new account's document, and its "not there" is not
+ * an answer. If the server cannot be reached the cache is the best there is,
+ * and the app's own guard (see ProfileGate) corrects a wrong guess.
+ */
+async function hasProfile(uid: string): Promise<boolean> {
+  const ref = doc(db, 'users', uid)
+  try {
+    return (await getDocFromServer(ref)).exists()
+  } catch {
+    try {
+      return (await getDoc(ref)).exists()
+    } catch {
+      return true
+    }
+  }
+}
+
+/** First and last name out of the one string Google gives. */
+export function splitDisplayName(displayName: string | null | undefined): {
+  firstName: string
+  lastName: string
+} {
+  const parts = String(displayName ?? '').trim().split(/\s+/).filter(Boolean)
+  return { firstName: parts[0] ?? '', lastName: parts.slice(1).join(' ') }
+}
+
+/**
+ * Writes the documents sign-up writes, for an account that came in through
+ * Google. The email counts as verified: Google has already proved it.
+ */
+export async function completeGoogleProfile({
+  firstName,
+  lastName,
+  phone,
+  universityId,
+  universityName,
+}: {
+  firstName: string
+  lastName: string
+  phone: string
+  universityId: string
+  universityName: string
+}): Promise<void> {
+  const user = auth.currentUser
+  if (!user) throw new Error('Your session ended. Sign in again.')
+  const uid = user.uid
+
+  // Only ever missing together, but a buyers record that is already there
+  // cannot be written again: the rules treat that as an edit of a wallet.
+  let buyerExists = false
+  try {
+    buyerExists = (await getDocFromServer(doc(db, 'buyers', uid))).exists()
+  } catch {
+    buyerExists = false
+  }
+
+  const batch = writeBatch(db)
+  batch.set(doc(db, 'users', uid), {
+    uid,
+    email: String(user.email ?? '').toLowerCase().trim(),
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
+    phone: phone.trim(),
+    role: 'buyer',
+    universityId,
+    universityName,
+    photoUrl: user.photoURL ?? '',
+    accountStatus: 'active',
+    isEmailVerified: true,
+    emailVerified: true,
+    isEmailOtpVerified: true,
+    signInProvider: 'google',
+    fcmToken: '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    lastLoginAt: serverTimestamp(),
+  })
+  if (!buyerExists) {
+    batch.set(doc(db, 'buyers', uid), {
+      userId: uid,
+      walletBalance: 0,
+      loyaltyPoints: 0,
+      defaultAddressId: '',
+      totalOrders: 0,
+      isBlocked: false,
+      createdAt: serverTimestamp(),
+    })
+  }
+  await batch.commit()
+}
+
+/** Closing Google's window is a change of mind, not an error to show. */
+export function isAuthCancelled(error: unknown): boolean {
+  const code = (error as { code?: string })?.code ?? ''
+  return (
+    code === 'auth/popup-closed-by-user' ||
+    code === 'auth/cancelled-popup-request' ||
+    code === 'auth/user-cancelled'
+  )
+}
+
 export async function sendPasswordReset(email: string, firstName?: string): Promise<void> {
   await postJson(
     '/password-reset/send',
@@ -218,7 +441,21 @@ export function authErrorMessage(error: unknown): string {
     case 'auth/user-not-found':
     case 'auth/wrong-password':
     case 'auth/invalid-credential':
-      return 'Email or password is incorrect.'
+      return 'Email or password is incorrect. If you usually continue with Google, use that instead.'
+    case 'auth/popup-blocked':
+      return 'Your browser blocked the Google window. Allow pop-ups for this site, then try again.'
+    case 'auth/account-exists-with-different-credential':
+      return 'That email already has an account. Sign in with your email and password.'
+    case 'auth/unauthorized-domain':
+    case 'auth/operation-not-allowed':
+      return 'Google sign-in is not available here right now. Use your email and password.'
+    case 'auth/web-storage-unsupported':
+    case 'auth/operation-not-supported-in-this-environment':
+      return 'This browser cannot open Google sign-in. Open this page in Chrome or Safari.'
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+    case 'auth/user-cancelled':
+      return 'Google sign-in was cancelled.'
     case 'auth/email-already-in-use':
       return 'An account with that email already exists. Sign in instead.'
     case 'auth/weak-password':

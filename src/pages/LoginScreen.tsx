@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { authErrorMessage, login, touchLastLogin } from '../data/auth'
 import { AuthError, AuthField } from '../components/AuthWidgets'
+import { GoogleSignIn } from '../components/GoogleSignIn'
 import { Button } from '../ui/Button'
 import { AppBar, ScreenBody } from '../ui/Screen'
 import { FadeSlideIn, staggerFor } from '../ui/motion'
@@ -18,6 +19,8 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  // Google's window is open: the form waits, but only its own button spins.
+  const [googleBusy, setGoogleBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const submit = async () => {
@@ -57,6 +60,16 @@ export default function LoginScreen() {
         </FadeSlideIn>
 
         <AuthError message={error} />
+
+        <FadeSlideIn>
+          <GoogleSignIn
+            from={from}
+            disabled={busy}
+            onError={setError}
+            divider="or sign in with email"
+            onBusyChange={setGoogleBusy}
+          />
+        </FadeSlideIn>
 
         <form
           onSubmit={(e) => {
@@ -100,7 +113,7 @@ export default function LoginScreen() {
               </Link>
             </div>
 
-            <Button label="Sign in" type="submit" busy={busy} glow />
+            <Button label="Sign in" type="submit" busy={busy} disabled={googleBusy} glow />
 
             <p
               className="t-body-sm"

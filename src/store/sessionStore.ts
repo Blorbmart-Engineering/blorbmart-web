@@ -38,6 +38,12 @@ interface SessionState {
   profile: Profile
   address: DeliveryAddress | null
   ready: boolean
+  /**
+   * Signed in, and the server has confirmed there is no users document: an
+   * account that came in through Google and has not finished signing up.
+   * False while that is not yet known. See ProfileGate.
+   */
+  profileMissing: boolean
 
   start: () => void
   setAddress: (address: DeliveryAddress | null) => Promise<void>
@@ -79,6 +85,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   profile: {},
   address: null,
   ready: false,
+  profileMissing: false,
 
   start: () => {
     if (authUnsub) return
@@ -103,7 +110,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (!user) {
         profileUnsub?.()
         profileUnsub = null
-        set({ profile: {} })
+        set({ profile: {}, profileMissing: false })
         setCampus(null)
         void useCartStore.getState().onSignOut()
       } else {
@@ -205,11 +212,20 @@ function listenToProfile(
   get: () => SessionState,
 ) {
   profileUnsub?.()
+  set({ profileMissing: false })
   profileUnsub = onSnapshot(
     doc(db, 'users', uid),
+    // Metadata changes are what deliver the server confirming a "not there"
+    // the cache answered first, which otherwise raises no second event.
+    { includeMetadataChanges: true },
     (snap) => {
       const previousCampus = catalogCampusId(get())
-      set({ profile: snap.data() ?? {} })
+      set({
+        profile: snap.data() ?? {},
+        // The cache has never seen a new account's document, so only the
+        // server's word counts as missing.
+        profileMissing: !snap.exists() && !snap.metadata.fromCache,
+      })
 
       // An invite link opened before signing in. Sent only now that the
       // profile exists — see applyPendingReferral.

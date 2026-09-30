@@ -39,6 +39,7 @@ const WelcomeScreen = lazy(() => import('./pages/WelcomeScreen'))
 const LoginScreen = lazy(() => import('./pages/LoginScreen'))
 const SignupScreen = lazy(() => import('./pages/SignupScreen'))
 const OtpScreen = lazy(() => import('./pages/OtpScreen'))
+const FinishSignupScreen = lazy(() => import('./pages/FinishSignupScreen'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 
 const HomeScreen = lazy(() => import('./pages/HomeScreen'))
@@ -106,6 +107,33 @@ function Protected({ children }: { children: ReactNode }) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
   return <>{children}</>
+}
+
+/**
+ * Where an account with no profile may still be. Sign-up and the code screen
+ * are there because an email account exists for a moment before its
+ * documents do; the rest are pages that need no account at all.
+ */
+const NO_PROFILE_NEEDED = /^\/(finish-signup|signup|verify|login|welcome|onboarding|legal|pay|treat|gift)(\/|$)/
+
+/**
+ * Sends a signed-in account that has no profile to finish signing up.
+ *
+ * "Continue with Google" makes the account first and asks for a phone number
+ * and a campus second. Somebody who closes the tab in between comes back
+ * signed in to an account that cannot order, so wherever they land they are
+ * brought back to the one screen that fixes it.
+ */
+function ProfileGate() {
+  const missing = useSessionStore((s) => s.profileMissing)
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!missing || pathname === '/' || NO_PROFILE_NEEDED.test(pathname)) return
+    navigate('/finish-signup', { replace: true, state: { from: pathname } })
+  }, [missing, pathname, navigate])
+  return null
 }
 
 /** A pushed screen starts at the top, the way a new route does on a phone. */
@@ -203,6 +231,7 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <Boot />
+        <ProfileGate />
         <ScrollToTop />
         <RouteSeo />
         <ForegroundPush />
@@ -227,6 +256,7 @@ export default function App() {
             <Route path="/login" element={<LoginScreen />} />
             <Route path="/signup" element={<SignupScreen />} />
             <Route path="/verify" element={<OtpScreen />} />
+            <Route path="/finish-signup" element={<FinishSignupScreen />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/invite/:code" element={<InviteRedirect />} />
 

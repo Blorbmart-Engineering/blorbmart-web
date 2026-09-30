@@ -30,6 +30,23 @@ export const FIREBASE_CONFIG = {
 }
 
 /**
+ * The hosts "Continue with Google" is switched on for.
+ *
+ * Firebase's sign-in window normally loads from <project>.firebaseapp.com,
+ * and that host does not answer on every Nigerian network: the window opened
+ * and hung. So each host here serves Firebase's sign-in pages itself, from
+ * /__/auth (a rewrite in vercel.json), and Google sends people back to that
+ * same host.
+ *
+ * A host belongs in this list only once Google has been told about it: its
+ * `https://<host>/__/auth/handler` must be among the web client's
+ * "Authorized redirect URIs" in Google Cloud Console → Credentials. Until it
+ * is, Google answers "Error 400: redirect_uri_mismatch", which is why the
+ * button is hidden everywhere else rather than shown and broken.
+ */
+export const GOOGLE_AUTH_HOSTS: string[] = []
+
+/**
  * The API host.
  *
  * This is `BLORB_API` in the Flutter app's api_client.dart, and the two must
