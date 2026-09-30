@@ -230,6 +230,27 @@ export function watchHistory(
     onData(orders)
   }
 
+  // The last resort, and the one that cannot be refused by an index or a
+  // rule: the backend's own read (GET /api/orders/mine). Not live, so it
+  // re-asks every 30 seconds while the screen is open.
+  let pollTimer: ReturnType<typeof setInterval> | null = null
+  let stopped = false
+  const fromApi = (cause: unknown) => {
+    console.warn('[orders] history query refused, reading through the API', cause)
+    const load = async () => {
+      try {
+        const data = await Api.get('/api/orders/mine', { query: { limit: String(limit) } })
+        const list = Array.isArray(data.orders) ? (data.orders as Record<string, unknown>[]) : []
+        if (!stopped) deliver(list.map((o) => ({ id: String(o.id), data: () => o })))
+      } catch (err) {
+        console.warn('[orders] history failed', err)
+        if (!stopped) onError?.(err)
+      }
+    }
+    void load()
+    pollTimer = setInterval(() => void load(), 30_000)
+  }
+
   let stop = onSnapshot(
     fbQuery(
       collection(db, 'orders'),
@@ -241,8 +262,7 @@ export function watchHistory(
     (snap) => deliver(snap.docs),
     (e) => {
       if ((e as { code?: string }).code !== 'failed-precondition') {
-        console.warn('[orders] history failed', e)
-        onError?.(e)
+        fromApi(e)
         return
       }
       console.warn('[orders] history index missing, over-fetching instead', e)
@@ -254,14 +274,15 @@ export function watchHistory(
           fbLimit(Math.min(limit * HISTORY_OVERFETCH, 200)),
         ),
         (snap) => deliver(snap.docs),
-        (err) => {
-          console.warn('[orders] history failed', err)
-          onError?.(err)
-        },
+        (err) => fromApi(err),
       )
     },
   )
-  return () => stop()
+  return () => {
+    stopped = true
+    stop()
+    if (pollTimer) clearInterval(pollTimer)
+  }
 }
 
 /**
