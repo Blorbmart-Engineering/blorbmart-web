@@ -20,6 +20,7 @@ import {
   createOrder,
   notifyVendor,
   payWithWallet,
+  saveOrderNote,
   startPaystack,
 } from '../data/orders'
 import { askSomeoneToPay } from '../data/payRequests'
@@ -74,6 +75,8 @@ export default function CheckoutScreen() {
   const [promoBusy, setPromoBusy] = useState(false)
 
   const [note, setNote] = useState('')
+  /** The draft the server holds a note for, and the note it holds. */
+  const noteSaved = useRef<{ id: string; note: string } | null>(null)
   const [pricing, setPricing] = useState(true)
   const [paying, setPaying] = useState(false)
   const walletPin = useWalletPin()
@@ -280,6 +283,19 @@ export default function CheckoutScreen() {
     }
   }
 
+  /**
+   * Puts the rider's note on the draft. Like the treat, it is saved at the
+   * moment of paying: the draft is written before anything is typed, and may
+   * be replaced any time the basket changes.
+   */
+  const syncNote = async (id: string) => {
+    const text = note.trim()
+    const held = noteSaved.current?.id === id ? noteSaved.current.note : ''
+    if (text === held) return
+    await saveOrderNote(id, text)
+    noteSaved.current = { id, note: text }
+  }
+
   const pay = async () => {
     if (!orderId || paying) return
 
@@ -308,6 +324,7 @@ export default function CheckoutScreen() {
 
     try {
       await syncTreat(orderId)
+      await syncNote(orderId)
 
       if (method === 'friend') {
         const request = await askSomeoneToPay(orderId, {

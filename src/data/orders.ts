@@ -61,6 +61,15 @@ export async function createOrder({
 }
 
 /**
+ * Puts the customer's note on the unpaid order, or takes it off with an empty
+ * one. The draft is written before anything has been typed, so the note is
+ * sent on its own at the moment of paying.
+ */
+export async function saveOrderNote(orderId: string, note: string): Promise<void> {
+  await Api.post(`/api/orders/${encodeURIComponent(orderId)}/note`, { body: { note } })
+}
+
+/**
  * Recalculates an order's totals. The client never decides what an order
  * costs — it only displays what the backend returns.
  *
