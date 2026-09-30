@@ -23,13 +23,14 @@ import {
   FileText,
   Gift,
   GraduationCap,
-  HelpCircle,
   Lock,
   LogOut,
+  Mail,
   MapPin,
   MessageCircle,
   Receipt,
   ShieldAlert,
+  Trash2,
   Users,
 } from 'lucide-react'
 import { apiErrorMessage } from '../lib/api'
@@ -37,7 +38,7 @@ import { APP_VERSION } from '../lib/config'
 import { maskPhone } from '../lib/format'
 import { addressLabel } from '../models/address'
 import { canPromptForPush, isStandalone, pushState, requestPush } from '../lib/push'
-import { supportUrl } from '../lib/support'
+import { SUPPORT_EMAIL, supportEmailUrl, supportUrl } from '../lib/support'
 import type { University } from '../data/university'
 import {
   canChooseCampus,
@@ -260,14 +261,31 @@ export default function AccountScreen() {
             onClick={() => openExternal(supportUrl())}
           />
           <Tile
-            icon={<HelpCircle size={21} aria-hidden />}
-            label="Help and FAQs"
-            onClick={() => openExternal('https://blorbmart.com/faq')}
+            icon={<Mail size={21} aria-hidden />}
+            label="Email us"
+            subtitle={SUPPORT_EMAIL}
+            onClick={() => window.location.assign(supportEmailUrl())}
+            last
           />
+        </Group>
+
+        {/* ── Legal ──────────────────────────────────────────────────── */}
+        <Group title="Legal" style={{ marginTop: 'var(--gap-lg)' }}>
           <Tile
             icon={<FileText size={21} aria-hidden />}
-            label="Terms and privacy"
-            onClick={() => openExternal('https://blorbmart.com/terms')}
+            label="Terms and conditions"
+            onClick={() => navigate('/legal/terms')}
+          />
+          <Tile
+            icon={<Lock size={21} aria-hidden />}
+            label="Privacy policy"
+            onClick={() => navigate('/legal/privacy')}
+          />
+          <Tile
+            icon={<Trash2 size={21} aria-hidden />}
+            label="Delete my account"
+            subtitle="What is removed, and how to ask"
+            onClick={() => navigate('/legal/delete-account')}
             last
           />
         </Group>

@@ -50,6 +50,7 @@ const OrderPlaced = lazy(() => import('./pages/OrderPlaced'))
 const OrdersScreen = lazy(() => import('./pages/OrdersScreen'))
 const TrackOrder = lazy(() => import('./pages/TrackOrder'))
 const GroupScreen = lazy(() => import('./pages/GroupScreen'))
+const LegalScreen = lazy(() => import('./pages/LegalScreen'))
 
 const WalletScreen = lazy(() => import('./pages/WalletScreen'))
 const TransactionsScreen = lazy(() => import('./pages/TransactionsScreen'))
@@ -219,6 +220,8 @@ export default function App() {
             {/* ── Post-order ─────────────────────────────── */}
             {/* Outside the Shell: the screen has its own sticky pay button. */}
             <Route path="/group/:code" element={<Protected><GroupScreen /></Protected>} />
+            {/* Terms, privacy and deletion, framed in the app. Open to everyone. */}
+            <Route path="/legal/:doc" element={<LegalScreen />} />
             <Route path="/orders" element={<Shell><OrdersScreen /></Shell>} />
             <Route
               path="/track/:orderId"

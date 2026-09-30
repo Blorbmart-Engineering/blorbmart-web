@@ -7,6 +7,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { BadgeCheck, Lock, MessageCircle, Package, Phone, ReceiptText } from 'lucide-react'
 import { SosCard } from '../components/SafetySheet'
+import { supportUrl } from '../lib/support'
 import { RatingCard } from '../components/Social'
 import { deliveryPin, watchOrder } from '../data/orders'
 import { dayAndTime, money } from '../lib/format'
@@ -29,7 +30,6 @@ import { AppBar, ScreenBody } from '../ui/Screen'
 import { StageBar } from '../components/HomeWidgets'
 import { StageIcon } from '../components/StageIcon'
 
-const SUPPORT_NUMBER = '2349161234567'
 
 // mapbox-gl is the heaviest thing on this screen and only matters once a
 // rider is on the road, so it loads on demand rather than with the page.
@@ -359,9 +359,7 @@ export default function TrackOrder() {
             icon={<MessageCircle size={18} aria-hidden />}
             onClick={() =>
               window.open(
-                `https://wa.me/${SUPPORT_NUMBER}?text=${encodeURIComponent(
-                  `Hello Blorbmart, I need help with order ${order.id}`,
-                )}`,
+                supportUrl(`Hello Blorbmart, I need help with order ${order.id}`),
                 '_blank',
                 'noopener,noreferrer',
               )
