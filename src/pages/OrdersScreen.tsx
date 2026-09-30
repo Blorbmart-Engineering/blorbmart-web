@@ -7,8 +7,9 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ReceiptText, WifiOff } from 'lucide-react'
+import { ChevronRight, HandCoins, ReceiptText, WifiOff } from 'lucide-react'
 import { peekHistory, watchHistory } from '../data/orders'
+import { myOpenPayRequests, type PayRequest } from '../data/payRequests'
 import { money, timeAgo } from '../lib/format'
 import {
   isTerminal,
@@ -42,6 +43,21 @@ export default function OrdersScreen() {
     return watchHistory(setOrders, 40, () => setFailed(true))
   }, [signedIn, attempt])
 
+  // Orders waiting on a pay-for-me link. They are not in the history above —
+  // nothing has been paid — so without this there would be no way back to a
+  // link once checkout had closed.
+  const [waiting, setWaiting] = useState<PayRequest[]>([])
+  useEffect(() => {
+    if (!signedIn) return
+    let cancelled = false
+    void myOpenPayRequests().then((list) => {
+      if (!cancelled) setWaiting(list)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [signedIn, attempt])
+
   const live = (orders ?? []).filter((o) => !isTerminal(o.stage))
   const past = (orders ?? []).filter((o) => isTerminal(o.stage))
 
@@ -66,6 +82,60 @@ export default function OrdersScreen() {
       <div style={{ paddingTop: 'var(--safe-top)' }}>
         <SectionHeader title="Your orders" subtitle="Everything you have ordered, newest first" />
       </div>
+
+      {waiting.length > 0 && (
+        <div style={{ paddingInline: 'var(--gap-page)', marginBottom: 'var(--gap-lg)' }}>
+          <div className="t-overline" style={{ marginBottom: 'var(--gap-sm)' }}>
+            Waiting for someone to pay
+          </div>
+          {waiting.map((request) => (
+            <PressScale
+              key={request.token}
+              scale={0.985}
+              onClick={() => navigate(`/pay-request/${request.orderId}`, { state: { request } })}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--gap-md)',
+                width: '100%',
+                marginBottom: 'var(--gap-sm)',
+                padding: 'var(--gap-lg)',
+                borderRadius: 'var(--radius-lg)',
+                background: 'var(--color-brand-softer)',
+                border: '1px solid var(--color-brand-soft)',
+                textAlign: 'left',
+              }}
+            >
+              <span
+                style={{
+                  display: 'grid',
+                  placeItems: 'center',
+                  width: 42,
+                  height: 42,
+                  flexShrink: 0,
+                  borderRadius: '50%',
+                  background: 'var(--color-surface)',
+                  color: 'var(--color-brand)',
+                }}
+              >
+                <HandCoins size={20} aria-hidden />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="t-h4 clamp-1" style={{ display: 'block' }}>
+                  {request.storeName || 'Your order'}
+                </span>
+                <span className="t-caption clamp-1" style={{ display: 'block' }}>
+                  Not placed yet · tap to share the link
+                </span>
+              </span>
+              <span className="t-price" style={{ flexShrink: 0 }}>
+                {money(request.total)}
+              </span>
+              <ChevronRight size={18} aria-hidden style={{ color: 'var(--color-ink-faint)' }} />
+            </PressScale>
+          ))}
+        </div>
+      )}
 
       {orders === null && failed ? (
         <EmptyState

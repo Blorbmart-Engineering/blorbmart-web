@@ -1,5 +1,5 @@
 /*
- * Link previews for shared store and event links.
+ * Link previews for shared store, event, pay-for-me and treat links.
  *
  * WhatsApp, X, Facebook, Telegram and the rest read a page's <meta> tags
  * without running JavaScript, so a shared /r/:id or /events/:id link would
@@ -76,15 +76,56 @@ async function storeCard(id) {
   }
 }
 
+/*
+ * A pay-for-me link. The preview is the first thing the person being asked
+ * sees, in the chat, before they decide whether to open it — so it says who
+ * is asking and how much, not "Blorbmart".
+ */
+async function payCard(token) {
+  const res = await fetch(`${API}/api/pay-requests/${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(6000) })
+  if (!res.ok) return null
+  const request = (await res.json())?.data
+  if (!request?.requesterName) return null
+
+  const total = naira(request.totalAmount)
+  const from = request.storeName ? ` from ${request.storeName}` : ''
+  if (request.status !== 'open') {
+    return {
+      title: `${request.requesterName}’s order on Blorbmart`,
+      description: request.status === 'paid' ? 'This order has been paid for.' : 'This payment link is no longer open.',
+      image: FALLBACK.image,
+    }
+  }
+  return {
+    title: `${request.requesterName} is asking you to pay ${total}`,
+    description: `For their order${from} on Blorbmart. Pay securely by card, transfer or USSD. No account needed.`,
+    image: FALLBACK.image,
+  }
+}
+
+/*
+ * A treat. Deliberately not looked up: the page behind the link holds a
+ * delivery PIN, and a chat app's preview bot has no business reading it.
+ */
+const TREAT_CARD = {
+  title: 'Someone sent you a treat on Blorbmart',
+  description: 'Open to see who it is from, track it to your door and get the delivery PIN the rider will ask for.',
+  image: FALLBACK.image,
+}
+
+const PATHS = { event: '/events/', store: '/r/', pay: '/pay/', treat: '/treat/' }
+
 export default async function handler(req, res) {
   const kind = String(req.query.kind || '')
   const id = String(req.query.id || '')
-  const path = kind === 'event' ? `/events/${encodeURIComponent(id)}` : kind === 'store' ? `/r/${encodeURIComponent(id)}` : '/'
+  const path = PATHS[kind] && id ? `${PATHS[kind]}${encodeURIComponent(id)}` : '/'
 
   let card = null
   try {
     if (id && kind === 'event') card = await eventCard(id)
     if (id && kind === 'store') card = await storeCard(id)
+    if (id && kind === 'pay') card = await payCard(id)
+    if (id && kind === 'treat') card = TREAT_CARD
   } catch {
     card = null
   }

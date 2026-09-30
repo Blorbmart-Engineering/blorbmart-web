@@ -7,6 +7,7 @@ Disallow: /api/
 Disallow: /cart
 Disallow: /checkout
 Disallow: /order-placed/
+Disallow: /pay-request/
 Disallow: /orders
 Disallow: /track/
 Disallow: /track-order/

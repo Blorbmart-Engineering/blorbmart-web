@@ -31,6 +31,28 @@
       "destination": "/api/share?kind=store&id=:id"
     },
     {
+      "source": "/pay/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Pinterest|redditbot|SkypeUriPreview|Embedly|vkShare|Viber).*"
+        }
+      ],
+      "destination": "/api/share?kind=pay&id=:id"
+    },
+    {
+      "source": "/treat/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Pinterest|redditbot|SkypeUriPreview|Embedly|vkShare|Viber).*"
+        }
+      ],
+      "destination": "/api/share?kind=treat&id=:id"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

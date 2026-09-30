@@ -52,6 +52,9 @@ const OrderPlaced = lazy(() => import('./pages/OrderPlaced'))
 const OrdersScreen = lazy(() => import('./pages/OrdersScreen'))
 const TrackOrder = lazy(() => import('./pages/TrackOrder'))
 const GroupScreen = lazy(() => import('./pages/GroupScreen'))
+const PayRequestScreen = lazy(() => import('./pages/PayRequestScreen'))
+const PayScreen = lazy(() => import('./pages/PayScreen'))
+const TreatScreen = lazy(() => import('./pages/TreatScreen'))
 const LegalScreen = lazy(() => import('./pages/LegalScreen'))
 
 const WalletScreen = lazy(() => import('./pages/WalletScreen'))
@@ -247,6 +250,17 @@ export default function App() {
               element={<Protected><OrderPlaced /></Protected>}
             />
 
+            {/* ── Links sent to somebody else ────────────── */}
+            {/* The requester's waiting room for a pay-for-me link. */}
+            <Route
+              path="/pay-request/:orderId"
+              element={<Protected><PayRequestScreen /></Protected>}
+            />
+            {/* Public, and outside the shell: opened by a parent or a friend
+                who may never have used Blorbmart. */}
+            <Route path="/pay/:token" element={<PayScreen />} />
+            <Route path="/treat/:token" element={<TreatScreen />} />
+
             {/* ── Post-order ─────────────────────────────── */}
             {/* Outside the Shell: the screen has its own sticky pay button. */}
             <Route path="/group/:code" element={<Protected><GroupScreen /></Protected>} />
@@ -286,10 +300,13 @@ export default function App() {
 
             {/* ── Events ─────────────────────────────────── */}
             <Route path="/events" element={<Shell><EventsScreen /></Shell>} />
-            <Route path="/events/:id" element={<Shell><EventDetailScreen /></Shell>} />
+            {/* Pushed, like /cart and /checkout: both end in a sticky button
+                ("Get tickets", "Pay"), and inside the shell the fixed tab bar
+                sat on top of it, so a tap on it landed on a tab. */}
+            <Route path="/events/:id" element={<EventDetailScreen />} />
             <Route
               path="/events/:id/checkout"
-              element={<Protected><Shell><TicketCheckoutScreen /></Shell></Protected>}
+              element={<Protected><TicketCheckoutScreen /></Protected>}
             />
             <Route
               path="/tickets"

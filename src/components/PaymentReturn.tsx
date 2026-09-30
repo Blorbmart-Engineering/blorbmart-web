@@ -69,6 +69,11 @@ export default function PaymentReturn() {
     const pending = readPending()
     if (!pending) return
 
+    // A pay-for-me link confirms its own payment (pages/PayScreen). Its
+    // reference is in the address the same way, and a payment of this
+    // customer's own left unfinished earlier must not be "confirmed" with it.
+    if (window.location.pathname.startsWith('/pay/')) return
+
     // Verification is authenticated. If the session has not restored yet, wait
     // for it rather than failing a real payment on a race.
     const unsub = auth.onAuthStateChanged((user) => {

@@ -13,7 +13,7 @@ import { apiErrorMessage, warmUp } from '../lib/api'
 import { money } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
 import { useBackFromPaystack } from '../hooks/useBackFromPaystack'
-import { getEvent, newIdempotencyKey, purchaseTickets } from '../data/events'
+import { getEvent, newIdempotencyKey, purchaseTickets, setEventGoing } from '../data/events'
 import { balance, watchLiveBalance } from '../data/wallet'
 import {
   orderCeiling,
@@ -46,6 +46,9 @@ export default function TicketCheckoutScreen() {
   const [walletBalance, setWalletBalance] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Off until ticked: being seen going to something is the buyer's choice,
+  // and an unticked box is what makes it one.
+  const [showGoing, setShowGoing] = useState(false)
   const walletPin = useWalletPin()
   useBackFromPaystack(() => setBusy(false))
 
@@ -106,6 +109,10 @@ export default function TicketCheckoutScreen() {
         holderPhone: holderPhone.trim() || undefined,
         idempotencyKey: idempotencyKey.current,
       })
+
+      // Best effort, and before the redirect a card payment makes: it is a
+      // name on a list, and must never stand between somebody and a ticket.
+      if (showGoing) void setEventGoing(id, true).catch((e) => console.warn('[events] going failed', e))
 
       if (order.authorizationUrl) {
         goToPaystack(order.authorizationUrl, {
@@ -219,6 +226,35 @@ export default function TicketCheckoutScreen() {
           inputMode="tel"
           placeholder="08012345678"
         />
+
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 'var(--gap-md)',
+            marginTop: 'var(--gap-sm)',
+            padding: 'var(--gap-md) var(--gap-lg)',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-line)',
+            cursor: 'pointer',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showGoing}
+            onChange={(e) => setShowGoing(e.target.checked)}
+            style={{ width: 20, height: 20, marginTop: 1, flexShrink: 0, accentColor: 'var(--color-events)' }}
+          />
+          <span style={{ minWidth: 0 }}>
+            <span className="t-label" style={{ display: 'block' }}>
+              Show me under “Who’s going”
+            </span>
+            <span className="t-caption" style={{ display: 'block' }}>
+              Your first name and an initial appear on the event page. You can take it off there.
+            </span>
+          </span>
+        </label>
 
         {/* ── Payment ────────────────────────────────────────────────── */}
         {!free && (

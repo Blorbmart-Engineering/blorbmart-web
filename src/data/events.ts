@@ -12,9 +12,11 @@ import { Api } from '../lib/api'
 import {
   eventFromMap,
   eventTicketFromMap,
+  goingListFromMap,
   ticketOrderFromMap,
   type BlorbEvent,
   type EventTicket,
+  type GoingList,
   type TicketOrder,
 } from '../models/events'
 
@@ -152,6 +154,30 @@ export async function getTicket(ticketId: string): Promise<EventTicket | null> {
     console.warn('[events] ticket failed', e)
     return null
   }
+}
+
+/* ── Who's going ───────────────────────────────────────────────────────── */
+
+const goingPath = (eventId: string) => `/api/events/${encodeURIComponent(eventId)}/going`
+
+/**
+ * The guest list: people who tapped "I'm going". Public, so a guest gets it
+ * too; the token is sent when there is one, which is how the server knows
+ * whether the viewer is on the list.
+ */
+export async function eventGoing(eventId: string, signedIn: boolean): Promise<GoingList> {
+  try {
+    return goingListFromMap(await Api.get(goingPath(eventId), { auth: signedIn }))
+  } catch (e) {
+    // A session that has not finished restoring is no reason to hide the list.
+    if (!signedIn) throw e
+    return goingListFromMap(await Api.get(goingPath(eventId), { auth: false }))
+  }
+}
+
+/** Puts the viewer on the list, or takes them off. Answers with the new list. */
+export async function setEventGoing(eventId: string, going: boolean): Promise<GoingList> {
+  return goingListFromMap(await Api.post(goingPath(eventId), { body: { going } }))
 }
 
 export function clearEventsCache(): void {

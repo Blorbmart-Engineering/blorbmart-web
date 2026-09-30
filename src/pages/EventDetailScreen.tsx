@@ -27,6 +27,7 @@ import { EmptyState, Pill, Skeleton } from '../ui/kit'
 import { FadeSlideIn, PressScale, staggerFor } from '../ui/motion'
 import { AppBar, ScreenBody, StickyFooter } from '../ui/Screen'
 import { SmartImage } from '../ui/SmartImage'
+import { EventGoing } from '../components/EventGoing'
 
 export default function EventDetailScreen() {
   const { id = '' } = useParams()
@@ -156,6 +157,10 @@ export default function EventDetailScreen() {
             </p>
           </FadeSlideIn>
         )}
+
+        <FadeSlideIn delay={110}>
+          <EventGoing event={event} ended={ended} />
+        </FadeSlideIn>
 
         {/* ── Tiers ──────────────────────────────────────────────────── */}
         {!ended && event.ticketTypes.length > 0 && (

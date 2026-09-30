@@ -123,6 +123,11 @@ const PRIVATE: [RegExp, string][] = [
   [/^\/cart$/, 'Your basket'],
   [/^\/checkout$/, 'Checkout'],
   [/^\/order-placed\//, 'Order placed'],
+  // Links meant for one person each. Never indexed: a pay-for-me link shows
+  // somebody's order, and a treat link holds a delivery PIN.
+  [/^\/pay-request\//, 'Ask someone to pay'],
+  [/^\/pay\//, 'Pay for an order'],
+  [/^\/treat\//, 'A treat for you'],
   [/^\/orders$/, 'Your orders'],
   [/^\/track(-order)?\//, 'Track your order'],
   [/^\/wallet$/, 'Wallet'],

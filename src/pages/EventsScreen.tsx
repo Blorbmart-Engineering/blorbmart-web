@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, MapPin, Ticket, WifiOff } from 'lucide-react'
+import { CalendarDays, MapPin, Ticket, Users, WifiOff } from 'lucide-react'
 import { listEvents, myTicketsSafe } from '../data/events'
 import { dayAndTime } from '../lib/format'
 import {
@@ -207,6 +207,21 @@ function EventCard({ event, onClick }: { event: BlorbEvent; onClick: () => void 
           >
             <MapPin size={14} aria-hidden style={{ flexShrink: 0 }} />
             {eventWhereLabel(event)}
+          </span>
+        )}
+        {event.goingCount > 0 && (
+          <span
+            className="t-caption"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              color: 'var(--color-events)',
+              fontWeight: 700,
+            }}
+          >
+            <Users size={14} aria-hidden />
+            {event.goingCount} going
           </span>
         )}
       </div>

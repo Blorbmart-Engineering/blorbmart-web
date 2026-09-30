@@ -20,9 +20,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Bike, Check, ChefHat, ChevronRight, House, ReceiptText, ShieldCheck } from 'lucide-react'
+import { Bike, Check, ChefHat, ChevronRight, Copy, Gift, House, MessageCircle, ReceiptText, ShieldCheck } from 'lucide-react'
 import { watchOrder } from '../data/orders'
+import { treatForOrder, treatShareText, type Treat } from '../data/treats'
 import { money } from '../lib/format'
+import { copyText, openWhatsApp } from '../lib/share'
 import { playAlert, primeAlertSound } from '../lib/alertSound'
 import { estimatedArrival, ORDER_STAGES, shortOrderId, type BlorbOrder } from '../models/order'
 import { firstName, useSessionStore } from '../store/sessionStore'
@@ -41,6 +43,19 @@ export default function OrderPlaced() {
 
   // Live, so the journey below moves on its own.
   useEffect(() => watchOrder(orderId, setOrder), [orderId])
+
+  // An order sent to a friend: their link is worth nothing until it reaches
+  // them, and this is the moment the sender is looking at the screen.
+  const [treat, setTreat] = useState<Treat | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void treatForOrder(orderId).then((found) => {
+      if (!cancelled && found?.link) setTreat(found)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [orderId])
   useEffect(() => primeAlertSound(), [])
 
   // The celebration: confetti once the mark has drawn, and a tap of haptics.
@@ -157,9 +172,54 @@ export default function OrderPlaced() {
           </section>
         </FadeSlideIn>
 
+        {treat && !cancelled && (
+          <FadeSlideIn delay={580}>
+            <section
+              className="placed-card"
+              aria-label="Send the treat link"
+              style={{ marginTop: 'var(--gap-md)', background: 'var(--color-appetite-soft)' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-md)' }}>
+                <Gift size={22} aria-hidden style={{ flexShrink: 0, color: 'var(--color-appetite-deep)' }} />
+                <span style={{ minWidth: 0 }}>
+                  <span className="t-h4" style={{ display: 'block' }}>
+                    Tell {treat.recipientName.split(' ')[0]} it’s coming
+                  </span>
+                  <span className="t-caption" style={{ display: 'block' }}>
+                    Their link tracks the order and shows the PIN the rider will ask them for.
+                  </span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 'var(--gap-sm)', marginTop: 'var(--gap-md)' }}>
+                <Button
+                  label="Send on WhatsApp"
+                  kind="appetite"
+                  size="md"
+                  icon={<MessageCircle size={17} aria-hidden />}
+                  onClick={() => openWhatsApp(treatShareText(treat, name), treat.recipientPhone)}
+                />
+                <Button
+                  label="Copy"
+                  kind="outline"
+                  size="md"
+                  expand={false}
+                  icon={<Copy size={16} aria-hidden />}
+                  onClick={() =>
+                    void copyText(treatShareText(treat, name)).then((ok) =>
+                      showToast(ok ? 'Message copied.' : 'Could not copy the link.', ok ? 'success' : 'danger'),
+                    )
+                  }
+                />
+              </div>
+            </section>
+          </FadeSlideIn>
+        )}
+
         <FadeSlideIn delay={620}>
           <p className="t-caption" style={{ textAlign: 'center', margin: 'var(--gap-lg) var(--gap-lg) 0' }}>
-            Your 4-digit delivery PIN is on the tracking screen. Give it to the rider only when the order is in your hands.
+            {treat
+              ? `The 4-digit delivery PIN is on ${treat.recipientName.split(' ')[0]}’s link, and on your tracking screen too.`
+              : 'Your 4-digit delivery PIN is on the tracking screen. Give it to the rider only when the order is in your hands.'}
           </p>
         </FadeSlideIn>
       </main>

@@ -121,9 +121,40 @@ export interface BlorbEvent {
   ticketTypes: TicketType[]
   totalCapacity: number
   totalSold: number
+  /** People who tapped "I'm going". Not ticket sales. */
+  goingCount: number
   lowestPrice: number
   isFree: boolean
   soldOut: boolean
+}
+
+/** One name on an event's guest list: a first name and an initial. */
+export interface GoingPerson {
+  name: string
+  photoUrl: string
+  hasTicket: boolean
+  you: boolean
+}
+
+export interface GoingList {
+  count: number
+  people: GoingPerson[]
+  /** Whether the signed-in viewer is on it. */
+  going: boolean
+}
+
+export function goingListFromMap(m: Record<string, unknown>): GoingList {
+  const raw = Array.isArray(m.people) ? (m.people as Record<string, unknown>[]) : []
+  return {
+    count: asInt(m.count),
+    people: raw.map((p) => ({
+      name: asString(p.name, 'Someone'),
+      photoUrl: asString(p.photoUrl),
+      hasTicket: asBool(p.hasTicket),
+      you: asBool(p.you),
+    })),
+    going: asBool(m.going),
+  }
 }
 
 export function eventFromMap(m: Record<string, unknown>): BlorbEvent {
@@ -149,6 +180,7 @@ export function eventFromMap(m: Record<string, unknown>): BlorbEvent {
       : [],
     totalCapacity: asInt(m.totalCapacity),
     totalSold: asInt(m.totalSold),
+    goingCount: asInt(m.goingCount),
     lowestPrice: asDouble(m.lowestPrice),
     isFree: asBool(m.isFree),
     soldOut: asBool(m.soldOut),

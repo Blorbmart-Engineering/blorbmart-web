@@ -6,9 +6,9 @@
    paying marks the draft abandoned on the way out.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Tag, Wallet, X } from 'lucide-react'
+import { Gift, HandCoins, MapPin, Tag, Wallet, X } from 'lucide-react'
 import { ApiError, apiErrorMessage, warmUp } from '../lib/api'
 import { asDouble, asString, money } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
@@ -22,6 +22,8 @@ import {
   payWithWallet,
   startPaystack,
 } from '../data/orders'
+import { askSomeoneToPay } from '../data/payRequests'
+import { clearTreat, saveTreat, treatProblem } from '../data/treats'
 import { balance, invalidateBalance, watchLiveBalance } from '../data/wallet'
 import { addressToFirestore, addressLabel } from '../models/address'
 import { cartSubtotal, cartVertical, useCartStore } from '../store/cartStore'
@@ -52,7 +54,19 @@ export default function CheckoutScreen() {
   const [total, setTotal] = useState(cartSubtotal(lines))
 
   const [walletBalance, setWalletBalance] = useState(0)
-  const [method, setMethod] = useState<PayMethod>('paystack')
+  // 'friend' is not a way of paying so much as a way of not paying: the
+  // order is parked and a link goes to whoever will. See data/payRequests.
+  const [method, setMethod] = useState<PayMethod | 'friend'>('paystack')
+  const [askNote, setAskNote] = useState('')
+
+  // Sending the order to somebody else. Saved onto the draft at the moment
+  // of paying, because the draft may be replaced any time the basket changes.
+  const [treatOn, setTreatOn] = useState(false)
+  const [treatName, setTreatName] = useState('')
+  const [treatPhone, setTreatPhone] = useState('')
+  const [treatMessage, setTreatMessage] = useState('')
+  /** The draft the server currently holds treat details for, if any. */
+  const treatSavedFor = useRef<string | null>(null)
 
   const [promo, setPromo] = useState('')
   const [promoApplied, setPromoApplied] = useState<string | null>(null)
@@ -252,8 +266,30 @@ export default function CheckoutScreen() {
     navigate(`/order-placed/${id}`, { replace: true })
   }
 
+  /**
+   * Puts the treat details on the draft, or takes them off one that had
+   * them. Throws the server's own sentence when it refuses.
+   */
+  const syncTreat = async (id: string) => {
+    if (treatOn) {
+      await saveTreat(id, { recipientName: treatName, recipientPhone: treatPhone, message: treatMessage })
+      treatSavedFor.current = id
+    } else if (treatSavedFor.current === id) {
+      await clearTreat(id)
+      treatSavedFor.current = null
+    }
+  }
+
   const pay = async () => {
     if (!orderId || paying) return
+
+    const treatIssue = treatOn
+      ? treatProblem({ recipientName: treatName, recipientPhone: treatPhone, message: treatMessage })
+      : null
+    if (treatIssue) {
+      showToast(treatIssue, 'danger')
+      return
+    }
 
     if (method === 'wallet' && walletBalance < total) {
       showToast(`Your wallet is short by ${money(total - walletBalance)}.`, 'danger')
@@ -271,6 +307,21 @@ export default function CheckoutScreen() {
     setError(null)
 
     try {
+      await syncTreat(orderId)
+
+      if (method === 'friend') {
+        const request = await askSomeoneToPay(orderId, {
+          promoCode: promoApplied ?? undefined,
+          message: askNote.trim(),
+        })
+        // The order now waits on somebody else. It must survive this screen
+        // closing, and the basket it was made from is spoken for.
+        paidRef.current = true
+        clearCart()
+        navigate(`/pay-request/${orderId}`, { replace: true, state: { request } })
+        return
+      }
+
       if (method === 'wallet') {
         await payWithWallet(orderId, promoApplied ?? undefined, pin)
         await onPaid(orderId)
@@ -361,6 +412,73 @@ export default function CheckoutScreen() {
             Change
           </span>
         </PressScale>
+
+        {/* ── Treat ──────────────────────────────────────────────────── */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={treatOn}
+          className="press"
+          onClick={() => setTreatOn((on) => !on)}
+          style={{
+            ['--press-scale' as string]: '0.99',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--gap-md)',
+            width: '100%',
+            marginTop: 'var(--gap-md)',
+            padding: 'var(--gap-md) var(--gap-lg)',
+            borderRadius: 'var(--radius-md)',
+            background: treatOn ? 'var(--color-appetite-soft)' : 'var(--color-surface)',
+            border: `1px solid ${treatOn ? 'var(--color-appetite)' : 'var(--color-line)'}`,
+            textAlign: 'left',
+          }}
+        >
+          <Gift size={20} aria-hidden style={{ flexShrink: 0, color: 'var(--color-appetite-deep)' }} />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span className="t-h4" style={{ display: 'block' }}>
+              Send this to a friend
+            </span>
+            <span className="t-caption" style={{ display: 'block' }}>
+              You pay, they get a link to track it and the delivery PIN
+            </span>
+          </span>
+          <Toggle on={treatOn} />
+        </button>
+
+        {treatOn && (
+          <div style={{ display: 'grid', gap: 'var(--gap-sm)', marginTop: 'var(--gap-sm)' }}>
+            <input
+              value={treatName}
+              onChange={(e) => setTreatName(e.target.value.slice(0, 60))}
+              placeholder="Their name"
+              aria-label="Their name"
+              autoComplete="off"
+              style={fieldStyle}
+            />
+            <input
+              value={treatPhone}
+              onChange={(e) => setTreatPhone(e.target.value.replace(/[^\d+\s]/g, '').slice(0, 18))}
+              placeholder="Their phone number"
+              aria-label="Their phone number"
+              inputMode="tel"
+              autoComplete="off"
+              style={fieldStyle}
+            />
+            <textarea
+              value={treatMessage}
+              onChange={(e) => setTreatMessage(e.target.value.slice(0, 200))}
+              placeholder="A message for them (optional)"
+              aria-label="A message for them"
+              rows={2}
+              style={{ ...fieldStyle, height: 'auto', padding: 'var(--gap-md) var(--gap-lg)', resize: 'none' }}
+            />
+            <p className="t-caption" style={{ margin: 0 }}>
+              Check the address above is where {treatName.trim() || 'your friend'} is. The rider
+              calls their number, and they give the rider the PIN.
+            </p>
+          </div>
+        )}
 
         {/* ── Note ───────────────────────────────────────────────────── */}
         <div className="t-overline" style={{ margin: 'var(--gap-xl) 0 var(--gap-sm)' }}>
@@ -473,6 +591,30 @@ export default function CheckoutScreen() {
           title="Card, transfer or USSD"
           subtitle="Secured by Paystack"
         />
+        <div style={{ height: 'var(--gap-sm)' }} />
+        <PaymentMethodTile
+          method="wallet"
+          selected={method === 'friend'}
+          onSelect={() => setMethod('friend')}
+          title="Ask someone to pay"
+          subtitle="Send a link to a parent or a friend"
+          icon={<HandCoins size={20} aria-hidden />}
+        />
+        {method === 'friend' && (
+          <div style={{ marginTop: 'var(--gap-sm)' }}>
+            <input
+              value={askNote}
+              onChange={(e) => setAskNote(e.target.value.slice(0, 160))}
+              placeholder="Add a note for them (optional)"
+              aria-label="A note for the person paying"
+              style={fieldStyle}
+            />
+            <p className="t-caption" style={{ margin: '6px 0 0' }}>
+              They see your first name, what you ordered and the total. They need no account,
+              and the order is placed the moment they pay.
+            </p>
+          </div>
+        )}
 
         {/* ── Summary ────────────────────────────────────────────────── */}
         <Card style={{ marginTop: 'var(--gap-xl)' }}>
@@ -530,7 +672,13 @@ export default function CheckoutScreen() {
           <Button label="Try again" glow onClick={retryDraft} />
         ) : (
           <Button
-            label={pricing ? 'Working out the total…' : `Pay ${money(total)}`}
+            label={
+              pricing
+                ? 'Working out the total…'
+                : method === 'friend'
+                  ? `Get a link for ${money(total)}`
+                  : `Pay ${money(total)}`
+            }
             busy={paying}
             disabled={pricing || !orderId || !address}
             glow
@@ -550,6 +698,48 @@ export default function CheckoutScreen() {
 
       {walletPin.sheet}
     </>
+  )
+}
+
+const fieldStyle: CSSProperties = {
+  width: '100%',
+  minWidth: 0,
+  height: 'var(--size-button-md)',
+  paddingInline: 'var(--gap-lg)',
+  borderRadius: 'var(--radius-md)',
+  background: 'var(--color-surface)',
+  border: '1px solid var(--color-line-strong)',
+}
+
+/** A switch, drawn only: the row it sits in is the button. */
+function Toggle({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        position: 'relative',
+        width: 44,
+        height: 26,
+        flexShrink: 0,
+        borderRadius: 'var(--radius-pill)',
+        background: on ? 'var(--color-appetite)' : 'var(--color-line-strong)',
+        transition: 'background var(--dur-fast) var(--ease-emphasized)',
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          top: 3,
+          left: on ? 21 : 3,
+          width: 20,
+          height: 20,
+          borderRadius: '50%',
+          background: '#fff',
+          boxShadow: 'var(--shadow-xs)',
+          transition: 'left var(--dur-fast) var(--ease-emphasized)',
+        }}
+      />
+    </span>
   )
 }
 
