@@ -7,13 +7,13 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, HandCoins, ReceiptText, WifiOff } from 'lucide-react'
+import { ChevronRight, HandCoins, ReceiptText, RotateCcw, WifiOff } from 'lucide-react'
 import { peekHistory, watchHistory } from '../data/orders'
 import { myOpenPayRequests, type PayRequest } from '../data/payRequests'
 import { money, timeAgo } from '../lib/format'
 import {
   isTerminal,
-  ORDER_STAGES,
+  stageSpec,
   orderSummaryLine,
   shortOrderId,
   type BlorbOrder,
@@ -22,6 +22,7 @@ import { isSignedIn, useSessionStore } from '../store/sessionStore'
 import { EmptyState, Pill, SectionHeader, Skeleton } from '../ui/kit'
 import { FadeSlideIn, LivePulse, PressScale, staggerFor } from '../ui/motion'
 import { ScreenBody } from '../ui/Screen'
+import { useReorder } from '../hooks/useReorder'
 import { StageIcon } from '../components/StageIcon'
 import { StageBar } from '../components/HomeWidgets'
 
@@ -36,6 +37,7 @@ export default function OrdersScreen() {
   const [orders, setOrders] = useState<BlorbOrder[] | null>(() => peekHistory())
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  const again = useReorder()
 
   useEffect(() => {
     if (!signedIn) return
@@ -189,34 +191,57 @@ export default function OrdersScreen() {
               </div>
               {past.map((order, i) => (
                 <FadeSlideIn key={order.id} delay={staggerFor(i, 4)}>
-                  <OrderRow order={order} onClick={() => navigate(`/track/${order.id}`)} />
+                  <OrderRow
+                    order={order}
+                    onClick={() => navigate(`/track/${order.id}`)}
+                    onReorder={() => void again.start(order.id)}
+                    reordering={again.busyId === order.id}
+                  />
                 </FadeSlideIn>
               ))}
             </>
           )}
         </div>
       )}
+      {again.ui}
     </ScreenBody>
   )
 }
 
-function OrderRow({ order, onClick }: { order: BlorbOrder; onClick: () => void }) {
-  const stage = ORDER_STAGES[order.stage]
+function OrderRow({
+  order,
+  onClick,
+  onReorder,
+  reordering = false,
+}: {
+  order: BlorbOrder
+  onClick: () => void
+  /** Past orders only: put it back in the basket. */
+  onReorder?: () => void
+  reordering?: boolean
+}) {
+  const stage = stageSpec(order)
   const terminal = isTerminal(order.stage)
+  const canReorder = Boolean(onReorder) && terminal && order.lines.length > 0
 
   return (
+    <div
+      style={{
+        marginBottom: 'var(--gap-md)',
+        borderRadius: 'var(--radius-lg)',
+        background: 'var(--color-surface)',
+        boxShadow: 'var(--shadow-sm)',
+        border: `1px solid ${terminal ? 'var(--color-line)' : `color-mix(in srgb, ${stage.color} 22%, transparent)`}`,
+        overflow: 'hidden',
+      }}
+    >
     <PressScale
       scale={0.985}
       onClick={onClick}
       style={{
         display: 'block',
         width: '100%',
-        marginBottom: 'var(--gap-md)',
         padding: 'var(--gap-lg)',
-        borderRadius: 'var(--radius-lg)',
-        background: 'var(--color-surface)',
-        boxShadow: 'var(--shadow-sm)',
-        border: `1px solid ${terminal ? 'var(--color-line)' : `color-mix(in srgb, ${stage.color} 22%, transparent)`}`,
         textAlign: 'left',
       }}
     >
@@ -241,7 +266,8 @@ function OrderRow({ order, onClick }: { order: BlorbOrder; onClick: () => void }
             {order.storeName || `Order #${shortOrderId(order)}`}
           </span>
           <span className="t-caption clamp-1" style={{ display: 'block' }}>
-            {orderSummaryLine(order)} · {timeAgo(order.createdAt)}
+            {orderSummaryLine(order)} ·{' '}
+            {order.waitingForSlot && order.scheduledLabel ? `for ${order.scheduledLabel}` : timeAgo(order.createdAt)}
           </span>
         </span>
 
@@ -282,5 +308,29 @@ function OrderRow({ order, onClick }: { order: BlorbOrder; onClick: () => void }
         </div>
       )}
     </PressScale>
+      {canReorder && (
+        <button
+          type="button"
+          className="press t-label"
+          disabled={reordering}
+          onClick={onReorder}
+          style={{
+            ['--press-scale' as string]: '0.98',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 'var(--gap-xs)',
+            width: '100%',
+            height: 44,
+            borderTop: '1px solid var(--color-line)',
+            color: 'var(--color-brand)',
+            opacity: reordering ? 0.6 : 1,
+          }}
+        >
+          <RotateCcw size={16} aria-hidden />
+          {reordering ? 'Adding…' : 'Order again'}
+        </button>
+      )}
+    </div>
   )
 }

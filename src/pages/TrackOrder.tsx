@@ -5,17 +5,20 @@
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { BadgeCheck, Lock, MessageCircle, Package, Phone, ReceiptText } from 'lucide-react'
+import { BadgeCheck, CalendarX, Lock, MessageCircle, Package, Phone, ReceiptText, RotateCcw } from 'lucide-react'
 import { SosCard } from '../components/SafetySheet'
 import { supportUrl } from '../lib/support'
 import { RatingCard } from '../components/Social'
-import { deliveryPin, watchOrder } from '../data/orders'
+import { cancelScheduledOrder, deliveryPin, watchOrder } from '../data/orders'
+import { invalidateBalance } from '../data/wallet'
+import { useReorder } from '../hooks/useReorder'
+import { apiErrorMessage } from '../lib/api'
 import { dayAndTime, money } from '../lib/format'
 import { lineTotal } from '../models/cart'
 import {
   estimatedArrival,
   isTerminal,
-  ORDER_STAGES,
+  stageSpec,
   shortOrderId,
   showsPin,
   trackingDistanceLabel,
@@ -26,7 +29,8 @@ import {
 import { Button, IconButton } from '../ui/Button'
 import { Card, DashedDivider, EmptyState, Skeleton, SummaryRow } from '../ui/kit'
 import { FadeSlideIn, LivePulse, Sheen } from '../ui/motion'
-import { AppBar, ScreenBody } from '../ui/Screen'
+import { AppBar, ScreenBody, showToast } from '../ui/Screen'
+import { ConfirmDialog } from '../ui/Sheet'
 import { StageBar } from '../components/HomeWidgets'
 import { StageIcon } from '../components/StageIcon'
 
@@ -57,6 +61,28 @@ export default function TrackOrder() {
    * while somebody watches the screen, which is the whole point of a tracker.
    */
   const [now, setNow] = useState(() => Date.now())
+  const again = useReorder()
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+
+  const cancelBooking = async () => {
+    setCancelling(true)
+    try {
+      const result = await cancelScheduledOrder(orderId)
+      invalidateBalance()
+      showToast(
+        result.refunded && result.refundAmount > 0
+          ? `Cancelled. ${money(result.refundAmount)} is back in your wallet.`
+          : 'Cancelled. Your refund is on its way to your wallet.',
+        'success',
+      )
+    } catch (e) {
+      showToast(apiErrorMessage(e, 'We could not cancel this order.'), 'danger')
+    } finally {
+      setCancelling(false)
+      setConfirmCancel(false)
+    }
+  }
 
   useEffect(() => {
     if (!orderId) return
@@ -95,9 +121,10 @@ export default function TrackOrder() {
     )
   }
 
-  const stage = ORDER_STAGES[order.stage]
+  const stage = stageSpec(order)
   const arrival = estimatedArrival(order)
   const minutesLeft = arrival ? Math.round((arrival.getTime() - now) / 60_000) : null
+  const canReorder = isTerminal(order.stage) && order.paymentState !== 'pending' && order.lines.length > 0
 
   return (
     <>
@@ -177,14 +204,18 @@ export default function TrackOrder() {
                   }}
                 >
                   <span className="t-price-lg" style={{ color: '#fff' }}>
-                    {trackingHasEta(order.tracking)
+                    {order.waitingForSlot && order.scheduledLabel
+                      ? order.scheduledLabel
+                      : trackingHasEta(order.tracking)
                       ? `${order.tracking?.etaMinutes} min`
                       : minutesLeft != null && minutesLeft > 0
                         ? `${minutesLeft} min`
                         : 'Any moment'}
                   </span>
                   <span className="t-caption" style={{ color: 'rgba(255,255,255,0.85)' }}>
-                    {trackingDistanceLabel(order.tracking)
+                    {order.waitingForSlot
+                      ? ''
+                      : trackingDistanceLabel(order.tracking)
                       ? `${trackingDistanceLabel(order.tracking)} away`
                       : minutesLeft != null && minutesLeft > 0
                         ? 'estimated arrival'
@@ -195,6 +226,27 @@ export default function TrackOrder() {
             )}
           </div>
         </FadeSlideIn>
+
+        {/* ── Booked, not yet with the kitchen ──────────────────────────── */}
+        {order.waitingForSlot && order.paymentState === 'paid' && (
+          <FadeSlideIn delay={40}>
+            <Card style={{ marginTop: 'var(--gap-lg)' }}>
+              <p className="t-body-sm" style={{ margin: 0 }}>
+                Plans changed? Cancel before the kitchen starts and the full {money(order.total)} goes
+                back to your Blorbmart wallet.
+              </p>
+              <div style={{ marginTop: 'var(--gap-md)' }}>
+                <Button
+                  label="Cancel this order"
+                  kind="outline"
+                  size="md"
+                  icon={<CalendarX size={18} aria-hidden />}
+                  onClick={() => setConfirmCancel(true)}
+                />
+              </div>
+            </Card>
+          </FadeSlideIn>
+        )}
 
         {/* ── Live map ───────────────────────────────────────────────── */}
         {!isTerminal(order.stage) &&
@@ -351,8 +403,21 @@ export default function TrackOrder() {
           </Card>
         </FadeSlideIn>
 
+        {/* ── Order again ────────────────────────────────────────────── */}
+        {canReorder && (
+          <div style={{ marginTop: 'var(--gap-xl)' }}>
+            <Button
+              label="Order this again"
+              glow
+              busy={again.busyId === order.id}
+              icon={<RotateCcw size={18} aria-hidden />}
+              onClick={() => void again.start(order.id)}
+            />
+          </div>
+        )}
+
         {/* ── Help ───────────────────────────────────────────────────── */}
-        <div style={{ marginTop: 'var(--gap-xl)' }}>
+        <div style={{ marginTop: canReorder ? 'var(--gap-md)' : 'var(--gap-xl)' }}>
           <Button
             label="Get help with this order"
             kind="outline"
@@ -367,6 +432,20 @@ export default function TrackOrder() {
           />
         </div>
       </ScreenBody>
+
+      <ConfirmDialog
+        open={confirmCancel}
+        title="Cancel this order?"
+        message={`${order.storeName || 'The store'} has not started it yet. ${money(order.total)} goes back to your Blorbmart wallet.`}
+        confirmLabel="Cancel order"
+        cancelLabel="Keep it"
+        destructive
+        busy={cancelling}
+        icon={<CalendarX size={26} aria-hidden />}
+        onConfirm={() => void cancelBooking()}
+        onCancel={() => setConfirmCancel(false)}
+      />
+      {again.ui}
     </>
   )
 }

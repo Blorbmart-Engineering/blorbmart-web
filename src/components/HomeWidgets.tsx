@@ -25,7 +25,7 @@ import {
   type Vertical,
 } from '../models/catalog'
 import {
-  ORDER_STAGES,
+  stageSpec,
   orderSummaryLine,
   showsPin,
   type BlorbOrder,
@@ -493,7 +493,7 @@ export function MarketCard({ vendor }: { vendor: Vendor }) {
  */
 export function LiveOrderCard({ order }: { order: BlorbOrder }) {
   const navigate = useNavigate()
-  const stage = ORDER_STAGES[order.stage]
+  const stage = stageSpec(order)
 
   return (
     <PressScale

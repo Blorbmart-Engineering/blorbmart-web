@@ -26,7 +26,7 @@ import { treatForOrder, treatShareText, type Treat } from '../data/treats'
 import { money } from '../lib/format'
 import { copyText, openWhatsApp } from '../lib/share'
 import { playAlert, primeAlertSound } from '../lib/alertSound'
-import { estimatedArrival, ORDER_STAGES, shortOrderId, type BlorbOrder } from '../models/order'
+import { estimatedArrival, shortOrderId, stageSpec, type BlorbOrder } from '../models/order'
 import { firstName, useSessionStore } from '../store/sessionStore'
 import { Button } from '../ui/Button'
 import { FadeSlideIn, PressScale, useAnimatedNumber } from '../ui/motion'
@@ -70,7 +70,7 @@ export default function OrderPlaced() {
   }, [])
 
   // The store accepting while the customer watches: its sound, its step.
-  const step = order ? ORDER_STAGES[order.stage]?.step ?? 0 : null
+  const step = order ? stageSpec(order).step : null
   useEffect(() => {
     if (step === null || !order) return
     const before = lastStep.current
@@ -125,7 +125,9 @@ export default function OrderPlaced() {
           <p className="placed-sub">
             {cancelled
               ? `${store} could not take this order. Your money is back in your wallet.`
-              : `${store} has your order. We’ll tell you the moment they accept it.`}
+              : order?.waitingForSlot && order.scheduledLabel
+                ? `Booked for ${order.scheduledLabel}. ${store} gets it shortly before, and we’ll tell you when they accept.`
+                : `${store} has your order. We’ll tell you the moment they accept it.`}
           </p>
         </FadeSlideIn>
       </header>
@@ -141,8 +143,14 @@ export default function OrderPlaced() {
                 value={order ? `${order.itemCount} item${order.itemCount === 1 ? '' : 's'}` : '…'}
               />
               <Meta
-                label="Arriving"
-                value={eta ? eta.toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' }) : '…'}
+                label={order?.scheduledLabel ? 'Booked for' : 'Arriving'}
+                value={
+                  order?.scheduledLabel
+                    ? order.scheduledLabel
+                    : eta
+                      ? eta.toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' })
+                      : '…'
+                }
               />
             </div>
 

@@ -6,7 +6,7 @@
    paying marks the draft abandoned on the way out.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Gift, HandCoins, MapPin, Tag, Wallet, X } from 'lucide-react'
 import { ApiError, apiErrorMessage, warmUp } from '../lib/api'
@@ -22,6 +22,7 @@ import {
   payWithWallet,
   saveOrderNote,
   startPaystack,
+  type DeliveryTime,
 } from '../data/orders'
 import { askSomeoneToPay } from '../data/payRequests'
 import { clearTreat, saveTreat, treatProblem } from '../data/treats'
@@ -36,6 +37,7 @@ import { AppBar, ScreenBody, StickyFooter, showToast } from '../ui/Screen'
 import { AddressSheet } from '../components/AddressSheet'
 import { PaymentMethodTile, type PayMethod } from '../components/PaymentMethodTile'
 import { useWalletPin } from '../components/WalletPinSheet'
+import { SchedulePicker } from '../components/SchedulePicker'
 
 export default function CheckoutScreen() {
   const navigate = useNavigate()
@@ -74,6 +76,16 @@ export default function CheckoutScreen() {
   const [promoError, setPromoError] = useState<string | null>(null)
   const [promoBusy, setPromoBusy] = useState(false)
 
+  // When to deliver: null is as soon as possible. Sent with the payment, and
+  // checked against the store's hours by the server at that moment.
+  const [when, setWhen] = useState<DeliveryTime>(null)
+  const [whenLabel, setWhenLabel] = useState<string | null>(null)
+  const [wantsLater, setWantsLater] = useState(false)
+  const pickWhen = useCallback((value: DeliveryTime, label: string | null) => {
+    setWhen(value)
+    setWhenLabel(label)
+  }, [])
+
   const [note, setNote] = useState('')
   /** The draft the server holds a note for, and the note it holds. */
   const noteSaved = useRef<{ id: string; note: string } | null>(null)
@@ -107,6 +119,8 @@ export default function CheckoutScreen() {
   const address = session.address
   const profile = session.profile
   const basketKey = JSON.stringify(lines)
+  const storeIdsKey = [...new Set(lines.map((l) => l.storeId))].join(',')
+  const storeIds = useMemo(() => (storeIdsKey ? storeIdsKey.split(',') : []), [storeIdsKey])
 
   /**
    * The backend sleeps, and its first request costs about twenty seconds.
@@ -307,6 +321,13 @@ export default function CheckoutScreen() {
       return
     }
 
+    if (method !== 'friend' && wantsLater && !when) {
+      showToast('Pick a delivery time, or choose as soon as possible.', 'danger')
+      return
+    }
+    // A pay link places the order whenever it is paid, so it never carries a time.
+    const deliverAt = method === 'friend' ? null : when
+
     if (method === 'wallet' && walletBalance < total) {
       showToast(`Your wallet is short by ${money(total - walletBalance)}.`, 'danger')
       return
@@ -340,12 +361,12 @@ export default function CheckoutScreen() {
       }
 
       if (method === 'wallet') {
-        await payWithWallet(orderId, promoApplied ?? undefined, pin)
+        await payWithWallet(orderId, promoApplied ?? undefined, pin, deliverAt)
         await onPaid(orderId)
         return
       }
 
-      const data = await startPaystack(orderId, promoApplied ?? undefined)
+      const data = await startPaystack(orderId, promoApplied ?? undefined, deliverAt)
       const url = asString(data.authorization_url ?? data.authorizationUrl)
       const reference = asString(data.reference)
       if (!url) throw new ApiError('Could not open the payment page.')
@@ -429,6 +450,22 @@ export default function CheckoutScreen() {
             Change
           </span>
         </PressScale>
+
+        {/* ── When ───────────────────────────────────────────────────── */}
+        <div className="t-overline" style={{ margin: 'var(--gap-xl) 0 var(--gap-sm)' }}>
+          When
+        </div>
+        <SchedulePicker
+          storeIds={storeIds}
+          value={when}
+          onChange={pickWhen}
+          onModeChange={(mode) => setWantsLater(mode === 'later')}
+          disabledReason={
+            method === 'friend'
+              ? 'A pay link places the order the moment it is paid, so it cannot be scheduled.'
+              : null
+          }
+        />
 
         {/* ── Treat ──────────────────────────────────────────────────── */}
         <button
@@ -694,7 +731,9 @@ export default function CheckoutScreen() {
                 ? 'Working out the total…'
                 : method === 'friend'
                   ? `Get a link for ${money(total)}`
-                  : `Pay ${money(total)}`
+                  : when && whenLabel
+                    ? `Pay ${money(total)} · ${whenLabel}`
+                    : `Pay ${money(total)}`
             }
             busy={paying}
             disabled={pricing || !orderId || !address}

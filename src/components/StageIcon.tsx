@@ -11,6 +11,7 @@ import {
   Bike,
   CircleCheckBig,
   CircleX,
+  Clock,
   CookingPot,
   MapPin,
   ReceiptText,
@@ -26,6 +27,7 @@ const ICONS = {
   pin: MapPin,
   check: CircleCheckBig,
   cancel: CircleX,
+  clock: Clock,
 } as const
 
 export type StageIconName = keyof typeof ICONS

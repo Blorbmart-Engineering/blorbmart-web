@@ -17,8 +17,8 @@ import {
 } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
 import { Api, ApiError } from '../lib/api'
-import { asString } from '../lib/format'
-import { cartLineToMap, type CartLine } from '../models/cart'
+import { asDouble, asString } from '../lib/format'
+import { cartLineFromMap, cartLineToMap, type CartLine } from '../models/cart'
 import type { Vertical } from '../models/catalog'
 import {
   isCheckoutDraft,
@@ -96,12 +96,13 @@ export function calculatePricing(orderId: string, promoCode?: string) {
  * A path, not a URL: the server joins it to the request's own Origin, so this
  * cannot be used to redirect somebody off-site.
  */
-export function startPaystack(orderId: string, promoCode?: string) {
+export function startPaystack(orderId: string, promoCode?: string, when?: DeliveryTime) {
   return Api.post('/api/orders/checkout/paystack', {
     body: {
       orderId,
       returnPath: `/order-placed/${orderId}`,
       ...(promoCode ? { promoCode } : {}),
+      ...whenBody(when),
     },
   })
 }
@@ -113,10 +114,103 @@ export function verifyPaystack(reference: string, orderId: string) {
 }
 
 /** `pin` is the wallet PIN, which the backend checks before debiting. */
-export function payWithWallet(orderId: string, promoCode?: string, pin?: string) {
+export function payWithWallet(orderId: string, promoCode?: string, pin?: string, when?: DeliveryTime) {
   return Api.post('/api/orders/checkout/wallet', {
-    body: { orderId, ...(promoCode ? { promoCode } : {}), ...(pin ? { pin } : {}) },
+    body: { orderId, ...(promoCode ? { promoCode } : {}), ...(pin ? { pin } : {}), ...whenBody(when) },
   })
+}
+
+/* ── Scheduled delivery ───────────────────────────────────────────────── */
+
+/**
+ * When the customer wants the order: null for as soon as possible, or one of
+ * the slot times `scheduleSlots` offered (an ISO string). The server checks
+ * it against the store's hours again at payment.
+ */
+export type DeliveryTime = string | null
+
+/**
+ * Always says which, so a checkout retried after switching back to "as soon
+ * as possible" clears the time the first attempt saved on the draft.
+ */
+function whenBody(when?: DeliveryTime) {
+  return when ? { fulfillmentType: 'scheduled', scheduledFor: when } : { fulfillmentType: 'asap' }
+}
+
+export interface ScheduleSlot {
+  at: string
+  label: string
+}
+
+export interface ScheduleDay {
+  key: string
+  label: string
+  slots: ScheduleSlot[]
+}
+
+export interface ScheduleOptions {
+  days: ScheduleDay[]
+  /** Why there are no slots, written for the customer. */
+  reason: string | null
+  /** How long before the slot the kitchen gets the order. */
+  releaseMinutes: number
+}
+
+export async function scheduleSlots(storeIds: string[]): Promise<ScheduleOptions> {
+  const data = await Api.get(`/api/orders/schedule-slots?storeIds=${encodeURIComponent(storeIds.join(','))}`)
+  const days = Array.isArray(data.days) ? data.days : []
+  return {
+    days: days
+      .filter((d): d is Record<string, unknown> => !!d && typeof d === 'object')
+      .map((d) => ({
+        key: asString(d.key),
+        label: asString(d.label),
+        slots: (Array.isArray(d.slots) ? d.slots : [])
+          .filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
+          .map((s) => ({ at: asString(s.at), label: asString(s.label) }))
+          .filter((s) => s.at),
+      }))
+      .filter((d) => d.slots.length),
+    reason: asString(data.reason) || null,
+    releaseMinutes: asDouble(data.releaseMinutes, 45),
+  }
+}
+
+/**
+ * Calls off a scheduled order the kitchen has not been given yet. The full
+ * amount goes back to the customer's wallet; the server says how much.
+ */
+export async function cancelScheduledOrder(orderId: string): Promise<{ refundAmount: number; refunded: boolean }> {
+  const data = await Api.post(`/api/orders/${encodeURIComponent(orderId)}/cancel`)
+  return { refundAmount: asDouble(data.refundAmount), refunded: data.refunded === true }
+}
+
+/* ── Order again ──────────────────────────────────────────────────────── */
+
+export interface Reorder {
+  storeId: string
+  storeName: string
+  storeOpen: boolean
+  /** Rebuilt from today's menu: today's prices, the old choices and notes. */
+  lines: CartLine[]
+  /** What could not come back, and why. */
+  unavailable: { name: string; reason: string }[]
+  /** Lines whose price moved since the old order. */
+  changed: { name: string; was: number; now: number }[]
+}
+
+export async function reorder(orderId: string): Promise<Reorder> {
+  const data = await Api.get(`/api/orders/${encodeURIComponent(orderId)}/reorder`)
+  const list = (raw: unknown) =>
+    (Array.isArray(raw) ? raw : []).filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+  return {
+    storeId: asString(data.storeId),
+    storeName: asString(data.storeName),
+    storeOpen: data.storeOpen !== false,
+    lines: list(data.lines).map(cartLineFromMap),
+    unavailable: list(data.unavailable).map((u) => ({ name: asString(u.name), reason: asString(u.reason) })),
+    changed: list(data.changed).map((c) => ({ name: asString(c.name), was: asDouble(c.was), now: asDouble(c.now) })),
+  }
 }
 
 /**

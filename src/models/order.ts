@@ -92,6 +92,26 @@ export const ORDER_STAGES: Record<OrderStage, StageSpec> = {
   },
 }
 
+/**
+ * The stage as the customer should read it. A scheduled order is paid and
+ * booked but not yet with the kitchen; its status is `scheduled`, which the
+ * stage list folds into `placed`, so it is told apart here.
+ */
+export function stageSpec(o: BlorbOrder): StageSpec {
+  if (o.waitingForSlot) {
+    return {
+      title: 'Scheduled',
+      blurb: o.scheduledLabel
+        ? `Booked for ${o.scheduledLabel}. The kitchen starts shortly before.`
+        : 'Booked. The kitchen starts shortly before your time.',
+      icon: 'clock',
+      color: 'var(--color-brand)',
+      step: 0,
+    }
+  }
+  return ORDER_STAGES[o.stage]
+}
+
 export function stageFromId(raw: unknown): OrderStage {
   switch (asString(raw).toLowerCase()) {
     case 'confirmed':
@@ -274,6 +294,15 @@ export interface BlorbOrder {
   cancelReason: string
   itemCount: number
   tracking: DeliveryTracking | null
+  /** When the customer asked for it, on a scheduled order. */
+  scheduledFor: Date | null
+  /** "Thu 2 Oct, 12:45 pm", written by the server. */
+  scheduledLabel: string
+  /**
+   * Paid and booked, not yet handed to the kitchen. Until then the customer
+   * can cancel for a full refund.
+   */
+  waitingForSlot: boolean
 }
 
 export function orderFromMap(id: string, m: Record<string, unknown>): BlorbOrder {
@@ -326,6 +355,9 @@ export function orderFromMap(id: string, m: Record<string, unknown>): BlorbOrder
       lines.reduce((n, l) => n + l.quantity, 0),
     ),
     tracking: trackingFromMap(m.tracking),
+    scheduledFor: asString(m.fulfillmentType) === 'scheduled' ? asDate(m.scheduledFor) : null,
+    scheduledLabel: asString(m.fulfillmentType) === 'scheduled' ? asString(m.scheduledLabel) : '',
+    waitingForSlot: asString(m.orderStatus ?? m.status).toLowerCase() === 'scheduled',
   }
 }
 
@@ -368,6 +400,7 @@ export function showsPin(o: BlorbOrder): boolean {
 
 /** Rough arrival clock for the tracker. */
 export function estimatedArrival(o: BlorbOrder): Date | null {
+  if (o.scheduledFor) return o.scheduledFor
   if (!o.createdAt) return null
   return new Date(o.createdAt.getTime() + o.etaMinutes * 60_000)
 }
