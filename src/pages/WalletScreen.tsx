@@ -223,12 +223,21 @@ export default function WalletScreen() {
 }
 
 export function EntryRow({ entry }: { entry: WalletEntry }) {
+  const navigate = useNavigate()
   const credit = entryIsCredit(entry)
   const status = entryStatusLabel(entry)
+  // Every entry with a reference has a receipt: tapping the row opens it.
+  const open = entry.reference ? () => navigate(`/receipt/wallet/${encodeURIComponent(entry.reference)}`) : undefined
 
   return (
     <div
+      role={open ? 'button' : undefined}
+      tabIndex={open ? 0 : undefined}
+      onClick={open}
+      onKeyDown={open ? (e) => e.key === 'Enter' && open() : undefined}
+      className={open ? 'press' : undefined}
       style={{
+        cursor: open ? 'pointer' : undefined,
         display: 'flex',
         alignItems: 'center',
         gap: 'var(--gap-md)',

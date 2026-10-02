@@ -27,6 +27,7 @@ import { ChipRail, EmptyState, Skeleton } from '../ui/kit'
 import { FadeSlideIn, PressScale, staggerFor } from '../ui/motion'
 import { AppBar, ScreenBody, showToast } from '../ui/Screen'
 import { isIosSafari } from '../hooks/useInstallPrompt'
+import { notificationRoute } from '../lib/notificationLinks'
 
 interface Note {
   id: string
@@ -102,7 +103,7 @@ export default function NotificationsScreen() {
               id: d.id,
               title: asString(data.title, 'Blorbmart'),
               body: asString(data.body ?? data.message),
-              route: asString(data.route ?? data.link),
+              route: notificationRoute(data) ?? '',
               status: asString(data.status, 'read'),
               type: asString(data.type, 'general'),
               at: asDate(data.createdAt),
