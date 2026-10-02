@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Bike, Clock, Search, ShoppingBasket, Star, Users, UtensilsCrossed } from 'lucide-react'
+import { Bike, ClipboardList, Clock, Search, ShoppingBasket, Star, Users, UtensilsCrossed } from 'lucide-react'
 import { menuStream, vendor as fetchVendor } from '../data/catalog'
 import { money, titleCase } from '../lib/format'
 import { applySeo, storeSeo } from '../lib/seo'
@@ -34,6 +34,7 @@ import { isSignedIn, useSessionStore } from '../store/sessionStore'
 import { SmartImage } from '../ui/SmartImage'
 import { DishRow } from '../components/CatalogCards'
 import { ItemSheet } from '../components/ItemSheet'
+import { MarketListSheet } from '../components/MarketListSheet'
 
 export default function VendorScreen() {
   const { id = '' } = useParams()
@@ -44,6 +45,7 @@ export default function VendorScreen() {
   const [section, setSection] = useState('All')
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<MenuItem | null>(null)
+  const [listOpen, setListOpen] = useState(false)
   const [missing, setMissing] = useState(false)
 
   const lines = useCartStore((s) => s.lines)
@@ -323,6 +325,42 @@ export default function VendorScreen() {
           </div>
         </div>
 
+        {/* ── Not listed? ─────────────────────────────────────────────── */}
+        {store?.vertical === 'market' && (
+          <div style={{ padding: '0 var(--gap-page) var(--gap-md)' }}>
+            <button
+              type="button"
+              className="press"
+              onClick={() => setListOpen(true)}
+              style={{
+                ['--press-scale' as string]: '0.99',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--gap-md)',
+                width: '100%',
+                padding: 'var(--gap-md) var(--gap-lg)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-market-soft)',
+                border: '1px solid var(--color-market)',
+                textAlign: 'left',
+              }}
+            >
+              <ClipboardList size={22} aria-hidden style={{ flexShrink: 0, color: 'var(--color-market)' }} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="t-h4" style={{ display: 'block' }}>
+                  What you want is not listed?
+                </span>
+                <span className="t-caption" style={{ display: 'block' }}>
+                  Send your list and place your order
+                </span>
+              </span>
+              <span className="t-label" style={{ color: 'var(--color-market)', flexShrink: 0 }}>
+                Send list
+              </span>
+            </button>
+          </div>
+        )}
+
         {sections.length > 2 && (
           <div style={{ paddingBottom: 'var(--gap-md)' }}>
             <ChipRail options={sections} selected={section} onSelect={setSection} />
@@ -354,8 +392,12 @@ export default function VendorScreen() {
               }
               icon={<UtensilsCrossed size={28} aria-hidden />}
               compact
-              actionLabel={query ? 'Clear search' : undefined}
-              onAction={query ? () => setQuery('') : undefined}
+              actionLabel={
+                store?.vertical === 'market' ? 'Send it as a list' : query ? 'Clear search' : undefined
+              }
+              onAction={
+                store?.vertical === 'market' ? () => setListOpen(true) : query ? () => setQuery('') : undefined
+              }
             />
           ) : (
             visible.map((item, i) => {
@@ -400,6 +442,15 @@ export default function VendorScreen() {
       </ScreenBody>
 
       <ItemSheet item={open} open={open !== null} onClose={() => setOpen(null)} />
+      {store?.vertical === 'market' && (
+        <MarketListSheet
+          open={listOpen}
+          onClose={() => setListOpen(false)}
+          storeId={store.id}
+          storeName={store.name}
+          initialList={query.trim()}
+        />
+      )}
     </>
   )
 }

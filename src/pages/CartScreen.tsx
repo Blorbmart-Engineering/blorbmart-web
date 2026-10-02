@@ -182,13 +182,20 @@ function CartRow({
             {addons}
           </div>
         )}
-        {line.note && (
-          <div
-            className="t-caption-sm clamp-1"
-            style={{ marginTop: 2, color: 'var(--color-brand)' }}
-          >
-            “{line.note}”
+        {line.kind === 'list' ? (
+          // The whole list, as written: the rider shops from exactly this.
+          <div className="t-caption" style={{ marginTop: 4, whiteSpace: 'pre-line' }}>
+            {line.note}
           </div>
+        ) : (
+          line.note && (
+            <div
+              className="t-caption-sm clamp-1"
+              style={{ marginTop: 2, color: 'var(--color-brand)' }}
+            >
+              “{line.note}”
+            </div>
+          )
         )}
 
         <div
@@ -200,20 +207,23 @@ function CartRow({
           }}
         >
           <span className="t-price">{money(lineTotal(line))}</span>
+          {line.kind === 'list' && <span className="t-caption">budget · change comes back</span>}
           <div style={{ flex: 1 }} />
           {/* At every quantity: stepping a line of five down to one just to
               reach the bin is five taps for what should be one. */}
           <IconButton label={`Remove ${line.name}`} size={32} onClick={onRemove}>
             <Trash2 size={16} aria-hidden style={{ color: 'var(--color-danger)' }} />
           </IconButton>
-          <Stepper
-            quantity={line.quantity}
-            compact
-            min={1}
-            label={line.name}
-            onIncrement={onIncrement}
-            onDecrement={onDecrement}
-          />
+          {line.kind !== 'list' && (
+            <Stepper
+              quantity={line.quantity}
+              compact
+              min={1}
+              label={line.name}
+              onIncrement={onIncrement}
+              onDecrement={onDecrement}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -28,6 +28,11 @@ export interface SelectedAddon {
 }
 
 export interface CartLine {
+  /**
+   * 'list' is a market shopping list (components/MarketListSheet): its note
+   * is the list and its price the budget. Absent on every ordinary line.
+   */
+  kind?: 'list'
   itemId: string
   name: string
   /**
@@ -94,6 +99,7 @@ export function addonSummary(line: CartLine): string {
 
 export function cartLineToMap(line: CartLine): Record<string, unknown> {
   return {
+    ...(line.kind ? { kind: line.kind } : {}),
     itemId: line.itemId,
     productId: line.itemId,
     name: line.name,
@@ -119,6 +125,7 @@ export function cartLineToMap(line: CartLine): Record<string, unknown> {
 export function cartLineFromMap(m: Record<string, unknown>): CartLine {
   const rawAddons = m.addons
   return {
+    ...(m.kind === 'list' ? { kind: 'list' as const } : {}),
     itemId: asString(m.itemId ?? m.productId),
     name: asString(m.name, 'Item'),
     unitPrice: asDouble(m.unitPrice ?? m.price),
