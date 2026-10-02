@@ -54,6 +54,8 @@ export default function GiftCardScreen() {
   )
   const [busy, setBusy] = useState<'reveal' | 'share' | 'download' | 'verify' | null>(null)
   const [burst, setBurst] = useState(0)
+  // The card's image, fetched ahead so Share can open the sheet on the tap.
+  const [prepared, setPrepared] = useState<{ code: string; file: File } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -101,6 +103,23 @@ export default function GiftCardScreen() {
     return res.blob()
   }
 
+  const cardFile = async (u: Unlocked) => new File([await fetchPng(u)], 'blorbmart-gift-card.png', { type: 'image/png' })
+
+  // Fetch the image for sharing the moment the code is in hand (see share).
+  const unlockedCode = unlocked?.code
+  const shareable = card?.role === 'sent' && card.status === 'active'
+  useEffect(() => {
+    if (!unlocked || !shareable || prepared?.code === unlocked.code) return
+    let gone = false
+    cardFile(unlocked)
+      .then((file) => !gone && setPrepared({ code: unlocked.code, file }))
+      .catch(() => {}) // the Share tap fetches it again and reports any error
+    return () => {
+      gone = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlockedCode, shareable])
+
   const download = async () => {
     const u = await unlock()
     if (!u) return
@@ -124,30 +143,55 @@ export default function GiftCardScreen() {
     }
   }
 
-  const share = async () => {
+  // A share sheet only opens inside the tap that asked for it: browsers
+  // (Safari above all) refuse navigator.share once a PIN prompt and a
+  // download have come in between. So the image is fetched as soon as the
+  // card is unlocked, and a tap that finds it ready shares with nothing
+  // awaited first.
+  const share = () => {
     if (!card) return
+    if (unlocked && prepared?.code === unlocked.code) {
+      void sendCard(shareMessage(card, unlocked.code, money), prepared.file)
+      return
+    }
+    void prepareThenShare(card)
+  }
+
+  const prepareThenShare = async (c: GiftCard) => {
     const u = await unlock()
     if (!u) return
-    const text = shareMessage(card, u.code, money)
     setBusy('share')
+    let file: File
     try {
-      const blob = await fetchPng(u)
-      const file = new File([blob], 'blorbmart-gift-card.png', { type: 'image/png' })
+      file = await cardFile(u)
+      setPrepared({ code: u.code, file })
+    } catch (e) {
+      if (e instanceof ApiError && e.statusCode === 403) setUnlocked(null)
+      showToast(apiErrorMessage(e, 'Could not share the card.'), 'danger')
+      return
+    } finally {
+      setBusy(null)
+    }
+    // Some browsers still allow this; the rest say no, and the next tap works.
+    await sendCard(shareMessage(c, u.code, money), file)
+  }
+
+  const sendCard = async (text: string, file: File) => {
+    const title = 'A Blorbmart gift card for you'
+    try {
       if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], text, title: 'A Blorbmart gift card for you' })
+        await navigator.share({ files: [file], text, title })
       } else if (navigator.share) {
-        await navigator.share({ text, title: 'A Blorbmart gift card for you' })
+        await navigator.share({ text, title })
       } else {
         await navigator.clipboard.writeText(text)
         showToast('Message copied — paste it wherever you like, with the downloaded card.', 'success')
       }
     } catch (e) {
-      if ((e as Error)?.name !== 'AbortError') {
-        if (e instanceof ApiError && e.statusCode === 403) setUnlocked(null)
-        showToast(apiErrorMessage(e, 'Could not share the card.'), 'danger')
-      }
-    } finally {
-      setBusy(null)
+      const name = (e as Error)?.name
+      if (name === 'AbortError') return
+      if (name === 'NotAllowedError') showToast('Your card is ready — tap Share again to send it.', 'success')
+      else showToast(apiErrorMessage(e, 'Could not share the card.'), 'danger')
     }
   }
 
@@ -303,7 +347,7 @@ export default function GiftCardScreen() {
             {card.status === 'active' && (
               <>
                 <div style={{ display: 'flex', gap: 'var(--gap-sm)', marginTop: 'var(--gap-md)' }}>
-                  <Button label="Share" glow busy={busy === 'share'} icon={<Share2 size={18} aria-hidden />} onClick={() => void share()} />
+                  <Button label="Share" glow busy={busy === 'share'} icon={<Share2 size={18} aria-hidden />} onClick={share} />
                   <Button label="Download" kind="outline" busy={busy === 'download'} icon={<Download size={18} aria-hidden />} onClick={() => void download()} />
                 </div>
                 <button
