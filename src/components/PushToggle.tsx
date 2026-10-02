@@ -12,16 +12,20 @@
 
 import { useEffect, useState } from 'react'
 import { BellRing } from 'lucide-react'
-import { alertsSwitchedOff, isStandalone, pushState, turnAlertsOff, turnAlertsOn, type PushState } from '../lib/push'
+import { alertsSwitchedOff, pushState, turnAlertsOff, turnAlertsOn, whyNoPush, type PushState } from '../lib/push'
 import { showToast } from '../ui/Screen'
 
 export function PushToggle({ last = false }: { last?: boolean }) {
   const [state, setState] = useState<PushState | null>(null)
   const [off, setOff] = useState(alertsSwitchedOff)
   const [busy, setBusy] = useState(false)
+  const [why, setWhy] = useState<string | null>(null)
 
   useEffect(() => {
-    void pushState().then(setState)
+    void pushState().then((s) => {
+      setState(s)
+      if (s === 'unsupported') void whyNoPush().then(setWhy)
+    })
   }, [])
 
   if (state === null || state === 'not_configured') return null
@@ -33,9 +37,7 @@ export function PushToggle({ last = false }: { last?: boolean }) {
   const subtitle = blocked
     ? 'Blocked by your browser. Allow notifications for this site in its settings, then come back.'
     : unsupported
-      ? isStandalone()
-        ? 'This browser cannot show alerts.'
-        : 'On iPhone, add Blorbmart to your Home Screen first, then turn this on there.'
+      ? why ?? 'Checking this device…'
       : on
         ? 'On — orders, payments and messages'
         : 'Off — you will not get alerts on this device'

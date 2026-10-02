@@ -48,6 +48,56 @@ export async function pushSupported(): Promise<boolean> {
   }
 }
 
+/** The iOS version from the user agent as [major, minor], or null off iOS. */
+function iosVersion(): [number, number] | null {
+  const ua = navigator.userAgent
+  if (!/iPhone|iPad|iPod/.test(ua) && !(ua.includes('Mac') && navigator.maxTouchPoints > 1)) return null
+  const m = ua.match(/OS (\d+)[_.](\d+)/) || ua.match(/Version\/(\d+)\.(\d+)/)
+  return m ? [Number(m[1]), Number(m[2])] : null
+}
+
+/**
+ * Why push is unavailable here, in words a customer can act on — or null
+ * when it is available. "This browser cannot show alerts" told nobody what
+ * to do; each check Firebase makes has its own fix, so each gets its own
+ * sentence.
+ */
+export async function whyNoPush(): Promise<string | null> {
+  if (typeof window === 'undefined') return 'This browser cannot show alerts.'
+  const ios = iosVersion()
+  if (ios !== null && (ios[0] < 16 || (ios[0] === 16 && ios[1] < 4))) {
+    return `Alerts need iOS 16.4 or later. This iPhone is on iOS ${ios[0]}.${ios[1]} — update it in Settings → General → Software Update.`
+  }
+  if (ios !== null && !isStandalone()) return 'On iPhone, add Blorbmart to your Home Screen from Safari (Share → Add to Home Screen), then open it from there.'
+  if (!navigator.cookieEnabled) {
+    return ios !== null
+      ? 'Safari is blocking all cookies, which alerts need. Turn off Settings → Safari → Block All Cookies, then reopen Blorbmart.'
+      : 'Cookies are blocked for this site, which alerts need. Allow them in your browser settings.'
+  }
+  if (!('serviceWorker' in navigator)) return 'This browser cannot run Blorbmart in the background, which alerts need.'
+  if (!('PushManager' in window) || !('Notification' in window)) {
+    return ios !== null
+      ? 'This Home Screen icon cannot get alerts. Delete it, then add Blorbmart again from Safari (Share → Add to Home Screen).'
+      : 'This browser does not support alerts. Try Chrome, Edge or Firefox.'
+  }
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open('blorb-push-check')
+      req.onsuccess = () => {
+        req.result.close()
+        resolve()
+      }
+      req.onerror = () => reject(req.error)
+    })
+  } catch {
+    return ios !== null
+      ? 'Your iPhone is blocking site storage (Lockdown Mode or a privacy setting), which alerts need.'
+      : 'Site storage is blocked (private browsing?), which alerts need.'
+  }
+  if (await pushSupported()) return null
+  return 'This browser cannot show alerts.'
+}
+
 export async function pushState(): Promise<PushState> {
   if (!(await pushSupported())) return 'unsupported'
   if (!VAPID_KEY) return 'not_configured'
