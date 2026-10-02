@@ -142,6 +142,8 @@ const PRIVATE: [RegExp, string][] = [
   [/^\/notifications$/, 'Notifications'],
   [/^\/receipt\//, 'Receipt'],
   [/^\/gifts\/.+/, 'Gift card'],
+  // Listings sit behind sign-in and belong to one campus; orders carry a PIN.
+  [/^\/marketplace\/.+/, 'Student marketplace'],
   [/^\/search$/, 'Search'],
   [/^\/verify$/, 'Verify your number'],
   [/^\/forgot-password$/, 'Reset your password'],
@@ -193,6 +195,14 @@ export function seoForPath(pathname: string): Seo {
   }
   if (/^\/events\/[^/]+$/.test(path)) return { title: brand('Event tickets'), path }
   if (/^\/r\/[^/]+$/.test(path)) return { title: brand('Order online'), path }
+  if (path === '/marketplace') {
+    return {
+      title: brand('Student marketplace — buy and sell on campus'),
+      description:
+        'Textbooks, phones, fans and hostel things from students on your campus. Your money is held until the item is in your hands.',
+      path,
+    }
+  }
   if (path === '/gifts') {
     return {
       title: brand('Gift cards — send a little joy'),

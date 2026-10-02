@@ -14,6 +14,7 @@ import AppShell from './components/AppShell'
 import PaymentReturn from './components/PaymentReturn'
 import RouteSeo from './components/RouteSeo'
 import { InstallBanner } from './components/InstallBanner'
+import { PushPrompt } from './components/PushPrompt'
 import { SplashVisual } from './components/SplashVisual'
 import { isSignedIn, useSessionStore } from './store/sessionStore'
 import { onForegroundPush } from './lib/push'
@@ -80,6 +81,14 @@ const GiftCardsScreen = lazy(() => import('./pages/GiftCardsScreen'))
 const GiftComposeScreen = lazy(() => import('./pages/GiftComposeScreen'))
 const GiftCardScreen = lazy(() => import('./pages/GiftCardScreen'))
 const RedeemGiftScreen = lazy(() => import('./pages/RedeemGiftScreen'))
+
+const MarketplaceScreen = lazy(() => import('./pages/MarketplaceScreen'))
+const ListingScreen = lazy(() => import('./pages/ListingScreen'))
+const SellScreen = lazy(() => import('./pages/SellScreen'))
+const SellerVerifyScreen = lazy(() => import('./pages/SellerVerifyScreen'))
+const MarketplaceMineScreen = lazy(() => import('./pages/MarketplaceMineScreen'))
+const MarketplaceOrderScreen = lazy(() => import('./pages/MarketplaceOrderScreen'))
+const MarketEarningsScreen = lazy(() => import('./pages/MarketEarningsScreen'))
 
 const AccountScreen = lazy(() => import('./pages/AccountScreen'))
 const AddressesScreen = lazy(() => import('./pages/AddressesScreen'))
@@ -237,6 +246,7 @@ export default function App() {
         <ForegroundPush />
         <PaymentReturn />
         <InstallBanner />
+        <PushPrompt moment="home" />
 
         <Toaster
           position="top-center"
@@ -358,6 +368,27 @@ export default function App() {
             {/* Public, and outside the shell: the QR on a card opens this for
                 someone who may never have used Blorbmart. */}
             <Route path="/gift" element={<RedeemGiftScreen />} />
+
+            {/* ── Student marketplace ────────────────────── */}
+            <Route path="/marketplace" element={<Shell><MarketplaceScreen /></Shell>} />
+            {/* Pushed: both end in a sticky footer (Buy, List it), which the
+                shell's tab bar would cover — see /cart. */}
+            <Route path="/marketplace/item/:id" element={<Protected><ListingScreen /></Protected>} />
+            <Route path="/marketplace/sell" element={<Protected><SellScreen /></Protected>} />
+            {/* Pushed for the same reason: "Send for checking" is a sticky footer. */}
+            <Route path="/marketplace/verify" element={<Protected><SellerVerifyScreen /></Protected>} />
+            <Route
+              path="/marketplace/mine"
+              element={<Protected><Shell><MarketplaceMineScreen /></Shell></Protected>}
+            />
+            <Route
+              path="/marketplace/orders/:id"
+              element={<Protected><Shell><MarketplaceOrderScreen /></Shell></Protected>}
+            />
+            <Route
+              path="/marketplace/earnings"
+              element={<Protected><Shell><MarketEarningsScreen /></Shell></Protected>}
+            />
 
             {/* ── Account ────────────────────────────────── */}
             <Route path="/account" element={<Shell><AccountScreen /></Shell>} />

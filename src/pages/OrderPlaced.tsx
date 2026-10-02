@@ -32,6 +32,7 @@ import { Button } from '../ui/Button'
 import { FadeSlideIn, PressScale, useAnimatedNumber } from '../ui/motion'
 import { Confetti } from '../components/gifts/Confetti'
 import { showToast } from '../ui/Screen'
+import { PushPrompt } from '../components/PushPrompt'
 
 export default function OrderPlaced() {
   const { orderId = '' } = useParams()
@@ -231,6 +232,8 @@ export default function OrderPlaced() {
           </p>
         </FadeSlideIn>
       </main>
+
+      <PushPrompt moment="order" />
 
       <footer className="placed-actions">
         <Button

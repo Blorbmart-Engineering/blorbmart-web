@@ -27,7 +27,8 @@ import {
   type Vertical,
 } from '../models/catalog'
 import type { BlorbOrder } from '../models/order'
-import { isSignedIn, useSessionStore } from '../store/sessionStore'
+import { hasRealCampus, isSignedIn, useSessionStore } from '../store/sessionStore'
+import { MarketplaceHomeCard } from '../components/marketplace/MarketParts'
 import { ChipRail, EmptyState, Rail, SectionHeader } from '../ui/kit'
 import { FadeSlideIn, staggerFor } from '../ui/motion'
 import { ScreenBody } from '../ui/Screen'
@@ -163,6 +164,13 @@ export default function HomeScreen() {
         {market && (
           <div style={{ padding: 'var(--gap-xl) var(--gap-page) 0' }}>
             <MarketCard vendor={market} />
+          </div>
+        )}
+
+        {/* ── Student marketplace ───────────────────────────────────── */}
+        {hasRealCampus(session) && (
+          <div style={{ padding: 'var(--gap-md) var(--gap-page) 0' }}>
+            <MarketplaceHomeCard />
           </div>
         )}
 

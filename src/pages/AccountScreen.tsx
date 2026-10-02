@@ -31,6 +31,7 @@ import {
   Receipt,
   ShieldAlert,
   Share2,
+  ShoppingBag,
   Trash2,
   Users,
 } from 'lucide-react'
@@ -252,6 +253,12 @@ export default function AccountScreen() {
             label="Gift cards"
             subtitle="Send one, or redeem a code"
             onClick={() => navigate('/gifts')}
+          />
+          <Tile
+            icon={<ShoppingBag size={21} aria-hidden />}
+            label="Student marketplace"
+            subtitle="Your listings, orders and earnings"
+            onClick={() => navigate(signedIn ? '/marketplace/mine' : '/marketplace')}
           />
           {referral && (
             <Tile

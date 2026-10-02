@@ -1,0 +1,160 @@
+/* The student marketplace: inputs, the listing grid and the photo strip. */
+
+.mkt-input {
+  width: 100%;
+  min-height: var(--size-input);
+  padding: 13px var(--gap-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-surface);
+  font: 600 15px/1.4 var(--font-sans);
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.mkt-input:focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 4px var(--color-brand-soft);
+}
+
+textarea.mkt-input {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.mkt-label {
+  display: block;
+  margin: var(--gap-xl) 0 var(--gap-sm);
+}
+
+.mkt-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-md);
+}
+
+@media (min-width: 720px) {
+  .mkt-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.mkt-card {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.mkt-card__photo {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: var(--color-surface-sunken);
+}
+
+.mkt-card__body {
+  padding: var(--gap-sm) var(--gap-md) var(--gap-md);
+}
+
+.mkt-card__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 2px 0 0;
+}
+
+.mkt-gallery {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  background: var(--color-surface-sunken);
+}
+
+.mkt-gallery::-webkit-scrollbar {
+  display: none;
+}
+
+.mkt-gallery > * {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  aspect-ratio: 1 / 1;
+  max-height: 62vh;
+}
+
+.mkt-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: var(--gap-sm);
+}
+
+.mkt-photo-slot {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-sunken);
+}
+
+.mkt-photo-add {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-md);
+  border: 1.5px dashed var(--color-line-strong);
+  background: var(--color-surface);
+  color: var(--color-ink-muted);
+  cursor: pointer;
+}
+
+.mkt-pin {
+  display: flex;
+  justify-content: center;
+  gap: var(--gap-sm);
+}
+
+.mkt-pin span {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-line-strong);
+  font: 800 30px/1 var(--font-mono, monospace);
+  color: var(--color-ink);
+}
+
+.mkt-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+}
+
+.mkt-tabs button {
+  flex: 1;
+  height: 38px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-ink-muted);
+  font: 700 13.5px/1 var(--font-sans);
+  cursor: pointer;
+}
+
+.mkt-tabs button[aria-selected='true'] {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-sm);
+}
