@@ -39,7 +39,7 @@ import { apiErrorMessage } from '../lib/api'
 import { APP_VERSION } from '../lib/config'
 import { maskPhone } from '../lib/format'
 import { addressLabel } from '../models/address'
-import { canPromptForPush, isStandalone, pushState, requestPush } from '../lib/push'
+import { PushToggle } from '../components/PushToggle'
 import { SUPPORT_EMAIL, supportEmailUrl, supportUrl } from '../lib/support'
 import type { University } from '../data/university'
 import {
@@ -76,8 +76,6 @@ export default function AccountScreen() {
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
-  const [pushLabel, setPushLabel] = useState('Order and payment alerts')
-  const [canAskPush, setCanAskPush] = useState(false)
   const { canInstall, promptInstall } = useInstallPrompt()
   const [loadedReferral, setReferral] = useState<ReferralOverview | null>(null)
 
@@ -105,23 +103,6 @@ export default function AccountScreen() {
     showToast('Invite link copied', 'success')
   }
 
-  useEffect(() => {
-    void pushState().then((state) => {
-      setPushLabel(
-        state === 'granted'
-          ? 'On — order and payment alerts'
-          : state === 'denied'
-            ? 'Blocked in your browser settings'
-            : state === 'unsupported'
-              ? isStandalone()
-                ? 'Not supported on this browser'
-                : 'Add Blorbmart to your Home Screen first'
-              : 'Order and payment alerts',
-      )
-    })
-    void canPromptForPush().then(setCanAskPush)
-  }, [])
-
   const campusFixed = !canChooseCampus(session)
   const billsOnly = isBillsOnly(session)
 
@@ -132,19 +113,6 @@ export default function AccountScreen() {
       showToast(`You are now shopping on ${campus.name}.`, 'success')
     } catch (e) {
       showToast(apiErrorMessage(e), 'danger')
-    }
-  }
-
-  const enablePush = async () => {
-    const result = await requestPush()
-    if (result === 'granted') {
-      setPushLabel('On — order and payment alerts')
-      setCanAskPush(false)
-      showToast('Alerts are on.', 'success')
-    } else if (result === 'unsupported') {
-      showToast('Add Blorbmart to your Home Screen to get alerts.', 'neutral')
-    } else {
-      showToast('Alerts are blocked in your browser settings.', 'danger')
     }
   }
 
@@ -277,10 +245,10 @@ export default function AccountScreen() {
           <Tile
             icon={<Bell size={21} aria-hidden />}
             label="Notifications"
-            subtitle={pushLabel}
-            onClick={canAskPush ? () => void enablePush() : () => navigate('/notifications')}
-            last
+            subtitle="Your alerts and messages"
+            onClick={() => navigate('/notifications')}
           />
+          <PushToggle last />
         </Group>
 
         {/* ── Safety ─────────────────────────────────────────────────── */}

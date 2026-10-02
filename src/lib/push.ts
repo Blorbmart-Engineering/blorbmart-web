@@ -54,9 +54,41 @@ export async function pushState(): Promise<PushState> {
   return Notification.permission as PushState
 }
 
+/**
+ * "Off" from the toggle, remembered on this device.
+ *
+ * A site cannot take back a permission the browser granted, so switching
+ * alerts off means two things instead: this browser's token is removed from
+ * our server, and nothing registers it again — not the next sign-in, not the
+ * soft ask — until the toggle is turned back on.
+ */
+const OFF_KEY = 'blorb_push_off_v1'
+
+export function alertsSwitchedOff(): boolean {
+  try {
+    return localStorage.getItem(OFF_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function rememberOff(off: boolean): void {
+  try {
+    if (off) localStorage.setItem(OFF_KEY, '1')
+    else localStorage.removeItem(OFF_KEY)
+  } catch {
+    /* private mode: the server-side removal still holds for this session */
+  }
+}
+
+/** Whether alerts actually reach this browser: allowed, and not switched off here. */
+export async function alertsOn(): Promise<boolean> {
+  return (await pushState()) === 'granted' && !alertsSwitchedOff()
+}
+
 /** Whether it is worth showing the customer an "enable alerts" prompt. */
 export async function canPromptForPush(): Promise<boolean> {
-  return (await pushState()) === 'default'
+  return !alertsSwitchedOff() && (await pushState()) === 'default'
 }
 
 async function swRegistration(): Promise<ServiceWorkerRegistration | undefined> {
@@ -122,6 +154,7 @@ async function postToken(userId: string, token: string): Promise<void> {
 export async function registerPushToken(): Promise<void> {
   const user = auth.currentUser
   if (!user) return
+  if (alertsSwitchedOff()) return
   if ((await pushState()) !== 'granted') return
 
   const token = await currentToken()
@@ -154,6 +187,26 @@ export async function requestPush(): Promise<PushState> {
     console.warn('[push] permission request failed', e)
     return 'denied'
   }
+}
+
+/**
+ * The toggle's "on". Asks the browser only if it has never been asked; if it
+ * already said yes, this just registers again. Must be called from a tap.
+ */
+export async function turnAlertsOn(): Promise<PushState> {
+  rememberOff(false)
+  const state = await pushState()
+  if (state === 'granted') {
+    await registerPushToken()
+    return state
+  }
+  return requestPush()
+}
+
+/** The toggle's "off": stop sending to this browser, and keep it that way. */
+export async function turnAlertsOff(): Promise<void> {
+  rememberOff(true)
+  await removePushToken()
 }
 
 /**
