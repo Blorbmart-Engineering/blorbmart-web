@@ -73,7 +73,10 @@ export const TRUSTED_API_ORIGINS = [new URL(API_BASE_URL).origin]
  * The private half stays in the Firebase console. Issued per project, so it
  * is the same key the rider app uses.
  */
-export const VAPID_KEY = env.VITE_FIREBASE_VAPID_KEY ??
+// `||`, not `??`: Vercel had VITE_FIREBASE_VAPID_KEY set but empty, which
+// builds to '' — `??` kept it, push read as "not configured", and no browser
+// was ever registered for alerts. A blank variable must mean the default.
+export const VAPID_KEY = env.VITE_FIREBASE_VAPID_KEY?.trim() ||
   'BGVY6js1W1Fo9V9ZYLn3JRJSFQPZZQfkbq8s7qaNepfaCdqUrMQX6HBTLco-Ok-YOPe_blzFJo0yZly4BhY_K8U'
 
 /**
