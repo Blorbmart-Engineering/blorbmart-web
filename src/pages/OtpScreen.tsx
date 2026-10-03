@@ -13,6 +13,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { auth } from '../lib/firebase'
 import { completeVerification, sendOtp } from '../data/auth'
+import { Api } from '../lib/api'
 import { AuthError } from '../components/AuthWidgets'
 import { Button } from '../ui/Button'
 import { AppBar, ScreenBody, showToast } from '../ui/Screen'
@@ -24,7 +25,12 @@ const RESEND_SECONDS = 45
 export default function OtpScreen() {
   const navigate = useNavigate()
   const location = useLocation()
-  const email = (location.state as { email?: string } | null)?.email ?? auth.currentUser?.email ?? ''
+  const arrived = (location.state ?? {}) as { email?: string; sendNow?: boolean; returnTo?: string }
+  const email = arrived.email ?? auth.currentUser?.email ?? ''
+  // Opened because a payment or order was refused for an unconfirmed email
+  // (VerifyEmailRedirect): no code was sent at sign-up time, so send one now,
+  // and go back to where they were afterwards.
+  const returnTo = arrived.returnTo && arrived.returnTo.startsWith('/') ? arrived.returnTo : '/home'
 
   const [digits, setDigits] = useState<string[]>(Array(LENGTH).fill(''))
   const [busy, setBusy] = useState(false)
@@ -40,6 +46,14 @@ export default function OtpScreen() {
 
   useEffect(() => {
     inputs.current[0]?.focus()
+  }, [])
+
+  useEffect(() => {
+    if (!arrived.sendNow || !email) return
+    sendOtp(email).catch((e) =>
+      setError(e instanceof Error ? e.message : 'We could not send the code. Tap resend.'),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const code = digits.join('')
@@ -83,8 +97,11 @@ export default function OtpScreen() {
     setError(null)
     try {
       await completeVerification({ uid, email, otpCode: code })
+      // The backend has marked the account verified; a fresh token carries it.
+      await auth.currentUser?.getIdToken(true).catch(() => undefined)
+      Api.invalidateToken()
       showToast('Email verified. Welcome to Blorbmart.', 'success')
-      navigate('/home', { replace: true })
+      navigate(returnTo, { replace: true })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That code did not work. Try again.')
       setDigits(Array(LENGTH).fill(''))

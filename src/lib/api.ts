@@ -219,12 +219,21 @@ async function send(
     return send(method, path, { ...options, attempt: 1 })
   }
 
+  // Customers confirm their email before they can pay or order. The app
+  // opens the code screen for them (VerifyEmailRedirect in App.tsx).
+  if (res.status === 403 && decoded.code === 'EMAIL_NOT_VERIFIED' && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(VERIFY_EMAIL_EVENT))
+  }
+
   throw new ApiError(
     readableError(decoded, res.status),
     res.status,
     decoded.code == null ? undefined : String(decoded.code),
   )
 }
+
+/** Fired when the backend refuses an action until the email is confirmed. */
+export const VERIFY_EMAIL_EVENT = 'blorb:verify-email'
 
 export const Api = {
   get: (path: string, options: Omit<SendOptions, 'body'> = {}) =>

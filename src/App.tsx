@@ -18,6 +18,7 @@ import { PushPrompt } from './components/PushPrompt'
 import { SplashVisual } from './components/SplashVisual'
 import { isSignedIn, useSessionStore } from './store/sessionStore'
 import { onForegroundPush } from './lib/push'
+import { VERIFY_EMAIL_EVENT } from './lib/api'
 import { showToast } from './ui/Screen'
 import { RouteLoader } from './ui/Loader'
 import { applyPendingReferral, rememberReferral } from './data/referral'
@@ -146,6 +147,25 @@ function ProfileGate() {
 }
 
 /** A pushed screen starts at the top, the way a new route does on a phone. */
+/**
+ * The backend refused an action because this customer has not confirmed
+ * their email. Open the code screen, send a fresh code, and come back here
+ * once it is confirmed.
+ */
+function VerifyEmailRedirect() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  useEffect(() => {
+    const open = () => {
+      if (location.pathname === '/verify') return
+      navigate('/verify', { state: { sendNow: true, returnTo: location.pathname + location.search } })
+    }
+    window.addEventListener(VERIFY_EMAIL_EVENT, open)
+    return () => window.removeEventListener(VERIFY_EMAIL_EVENT, open)
+  }, [navigate, location.pathname, location.search])
+  return null
+}
+
 function ScrollToTop() {
   const { pathname } = useLocation()
   useEffect(() => {
@@ -241,6 +261,7 @@ export default function App() {
       <BrowserRouter>
         <Boot />
         <ProfileGate />
+        <VerifyEmailRedirect />
         <ScrollToTop />
         <RouteSeo />
         <ForegroundPush />
