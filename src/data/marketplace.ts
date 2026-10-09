@@ -111,6 +111,20 @@ export const MAX_PHOTOS = 5
 
 const unwrap = <T>(data: unknown) => data as T
 
+/**
+ * Api wraps top-level array responses as { data: [...] } so that all callers
+ * receive an object. Keep list endpoints tolerant of that envelope (and of a
+ * raw array from older API clients) instead of letting a malformed response
+ * crash a screen while it is rendering.
+ */
+const unwrapList = <T>(data: unknown): T[] => {
+  if (Array.isArray(data)) return data as T[]
+  if (data && typeof data === 'object' && Array.isArray((data as { data?: unknown }).data)) {
+    return (data as { data: T[] }).data
+  }
+  return []
+}
+
 /* ── Becoming a seller ────────────────────────────────────────────────── */
 
 export type SellerStatus = 'unverified' | 'pending' | 'verified' | 'rejected' | 'suspended'
@@ -139,7 +153,7 @@ export async function marketFeed(params: { category?: string; q?: string } = {})
   return data.listings ?? []
 }
 
-export const myListings = async () => unwrap<Listing[]>(await Api.get('/api/marketplace/listings/mine'))
+export const myListings = async () => unwrapList<Listing>(await Api.get('/api/marketplace/listings/mine'))
 
 export const getListing = async (id: string) =>
   unwrap<Listing>(await Api.get(`/api/marketplace/listings/${encodeURIComponent(id)}`))
@@ -165,7 +179,7 @@ export const buyListing = async (id: string, pin: string) =>
 /* ── Orders ───────────────────────────────────────────────────────────── */
 
 export const myMarketOrders = async (role: 'buyer' | 'seller') =>
-  unwrap<MarketOrder[]>(await Api.get(`/api/marketplace/orders?role=${role}`))
+  unwrapList<MarketOrder>(await Api.get(`/api/marketplace/orders?role=${role}`))
 
 export const getMarketOrder = async (id: string) =>
   unwrap<MarketOrder>(await Api.get(`/api/marketplace/orders/${encodeURIComponent(id)}`))
@@ -187,7 +201,7 @@ export const moveEarnings = async (amount: number, pin: string) =>
   unwrap<Earnings>(await Api.post('/api/marketplace/earnings/move', { body: { amount, pin } }))
 
 export const listBanks = async () =>
-  unwrap<{ name: string; code: string; active: boolean }[]>(await Api.get('/api/marketplace/earnings/banks'))
+  unwrapList<{ name: string; code: string; active: boolean }>(await Api.get('/api/marketplace/earnings/banks'))
 
 export const verifyBank = async (bankCode: string, accountNumber: string) =>
   unwrap<{ bankName: string; accountName: string }>(
