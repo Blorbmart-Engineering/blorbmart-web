@@ -21,6 +21,7 @@ import {
 export interface BillCatalog {
   categories: BillCategory[]
   services: BillService[]
+  billPaymentsEnabled: boolean
   /**
    * True when the backend has no aggregator credentials and is running its
    * simulator. Surfaced in the UI so nobody mistakes a test purchase for a
@@ -32,6 +33,7 @@ export interface BillCatalog {
 export const EMPTY_CATALOG: BillCatalog = {
   categories: [],
   services: [],
+  billPaymentsEnabled: true,
   simulated: false,
 }
 
@@ -95,6 +97,7 @@ function catalogFrom(data: Json): BillCatalog {
   return {
     categories: listOf(data.categories, billCategoryFromMap),
     services: listOf(data.services, billServiceFromMap),
+    billPaymentsEnabled: data.billPaymentsEnabled !== false,
     simulated: data.simulated === true,
   }
 }

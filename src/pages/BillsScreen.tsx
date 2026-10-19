@@ -186,9 +186,18 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
           </div>
         ) : (
           <>
-            <SectionHeader title="Pay a bill" subtitle="Delivered in seconds" />
+            {!data.billPaymentsEnabled ? (
+              <EmptyState
+                title="Bill payments are temporarily paused"
+                message="Please try again later. Your wallet balance is safe."
+                icon={<WifiOff size={28} aria-hidden />}
+                compact
+              />
+            ) : (
+              <>
+                <SectionHeader title="Pay a bill" subtitle="Delivered in seconds" />
 
-            {data.categories.length > 1 && (
+                {data.categories.length > 1 && (
               <div style={{ paddingBottom: 'var(--gap-lg)' }}>
                 <ChipRail
                   options={data.categories.map((c) => c.label)}
@@ -201,14 +210,14 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
               </div>
             )}
 
-            {services.length === 0 ? (
+                {services.length === 0 ? (
               <EmptyState
                 title="Nothing here yet"
                 message="No billers are available in this category right now."
                 icon={<Receipt size={28} aria-hidden />}
                 compact
               />
-            ) : (
+                ) : (
               <div
                 style={{
                   display: 'grid',
@@ -227,6 +236,8 @@ export default function BillsScreen({ isHome = false }: { isHome?: boolean }) {
                   </FadeSlideIn>
                 ))}
               </div>
+                )}
+              </>
             )}
           </>
         )}

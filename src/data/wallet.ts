@@ -38,6 +38,12 @@ export function watchLiveBalance(onValue: (value: number) => void): () => void {
   )
 }
 
+/** Whether the admin has paused new wallet deposits. */
+export async function walletFundingEnabled(): Promise<boolean> {
+  const data = await Api.get('/api/wallet/funding-status')
+  return data.enabled !== false
+}
+
 /** One line in the wallet ledger. */
 export interface WalletEntry {
   id: string

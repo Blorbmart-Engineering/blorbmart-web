@@ -26,6 +26,7 @@ import {
   entryTitle,
   startTopUp,
   transactions,
+  walletFundingEnabled,
   watchLiveBalance,
   type WalletEntry,
 } from '../data/wallet'
@@ -50,6 +51,7 @@ export default function WalletScreen() {
   const [amount, setAmount] = useState(0)
   const [entries, setEntries] = useState<WalletEntry[] | null>(null)
   const [topUpOpen, setTopUpOpen] = useState(false)
+  const [fundingEnabled, setFundingEnabled] = useState(false)
   const animated = useAnimatedNumber(amount)
 
   const load = useCallback(async (refresh = false) => {
@@ -67,6 +69,7 @@ export default function WalletScreen() {
     // start out of the tap that is supposed to open Paystack.
     warmUp()
     void load()
+    void walletFundingEnabled().then(setFundingEnabled).catch(() => setFundingEnabled(false))
   }, [signedIn, load])
 
   // The balance follows the wallet document, and the list below it is re-read
@@ -132,6 +135,7 @@ export default function WalletScreen() {
               kind="outline"
               size="md"
               icon={<Plus size={18} aria-hidden />}
+              disabled={!fundingEnabled}
               onClick={() => setTopUpOpen(true)}
             />
             <Button
@@ -156,7 +160,13 @@ export default function WalletScreen() {
 
         {/* ── Bank transfer account ──────────────────────────────────── */}
         <div style={{ padding: 'var(--gap-xl) var(--gap-page) 0' }}>
-          <TransferAccountCard onFunded={() => void load(true)} />
+          {fundingEnabled ? (
+            <TransferAccountCard onFunded={() => void load(true)} />
+          ) : (
+            <div style={{ padding: 'var(--gap-lg)', borderRadius: 'var(--radius-lg)', background: 'var(--color-surface-sunken)', color: 'var(--color-ink-muted)' }}>
+              Wallet funding is temporarily paused. Existing wallet balances remain safe.
+            </div>
+          )}
         </div>
 
         {/* ── Wallet PIN ─────────────────────────────────────────────── */}
@@ -217,7 +227,7 @@ export default function WalletScreen() {
         </div>
       </ScreenBody>
 
-      <TopUpSheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />
+      <TopUpSheet open={topUpOpen && fundingEnabled} onClose={() => setTopUpOpen(false)} />
     </>
   )
 }
