@@ -152,8 +152,28 @@ export interface Vendor {
   totalOrders: number
   openingHour: number
   closingHour: number
+  /** Per-day hours. Empty when one window covers the whole week. */
+  weeklyHours: DayHours[]
   /** Filled in at query time when the user's coordinates are known. */
   distanceKm: number | null
+}
+
+/** A close that is not after the open runs past midnight. */
+export interface DayHours {
+  day: string
+  open: boolean
+  /** "HH:mm". */
+  from: string
+  to: string
+}
+
+function weeklyHoursFrom(rows: unknown): DayHours[] {
+  if (!Array.isArray(rows)) return []
+  return rows.flatMap((row) => {
+    if (!row || typeof row !== 'object') return []
+    const r = row as Record<string, unknown>
+    return [{ day: asString(r.day), open: r.open !== false, from: asString(r.from, '00:00'), to: asString(r.to, '00:00') }]
+  })
 }
 
 type GeoLike = { lat?: unknown; latitude?: unknown; lng?: unknown; longitude?: unknown }
@@ -195,6 +215,7 @@ export function vendorFromMap(id: string, m: Record<string, unknown>): Vendor {
     totalOrders: asInt(m.totalOrders ?? m.totalSales),
     openingHour: clamp(asInt(m.openingHour, 8), 0, 23),
     closingHour: clamp(asInt(m.closingHour, 22), 1, 24),
+    weeklyHours: weeklyHoursFrom(m.weeklyHours),
     distanceKm: null,
   }
 }
@@ -205,12 +226,36 @@ export function vendorFromMap(id: string, m: Record<string, unknown>): Vendor {
  */
 export function isOpenNow(v: Vendor): boolean {
   if (!v.isActive || !v.isOpen) return false
+  if (v.weeklyHours.length) return withinWeek(v.weeklyHours, new Date())
   const hour = new Date().getHours()
   if (v.closingHour > v.openingHour) {
     return hour >= v.openingHour && hour < v.closingHour
   }
   // Crosses midnight, e.g. 18:00 to 02:00.
   return hour >= v.openingHour || hour < v.closingHour
+}
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+function minutesOf(value: string): number {
+  const [h, m] = value.split(':').map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
+
+/** 01:00 on Saturday can still be Friday's shift, even if Saturday is closed. */
+export function withinWeek(week: DayHours[], now: Date): boolean {
+  const minute = now.getHours() * 60 + now.getMinutes()
+  const today = week.find((row) => row.day === DAY_NAMES[now.getDay()])
+  if (today?.open) {
+    const from = minutesOf(today.from)
+    const to = minutesOf(today.to)
+    if (minute >= from && (to <= from || minute < to)) return true
+  }
+  const yesterday = week.find((row) => row.day === DAY_NAMES[(now.getDay() + 6) % 7])
+  if (!yesterday?.open) return false
+  const from = minutesOf(yesterday.from)
+  const to = minutesOf(yesterday.to)
+  return to <= from && minute < to
 }
 
 export function priceBadge(v: Vendor): string {
