@@ -121,6 +121,15 @@ function isFresh(): boolean {
   return vendorsLoadedAt > 0 && Date.now() - vendorsLoadedAt < TTL_MS
 }
 
+/**
+ * A suspended vendor's store (the backend's vendorClosureService). It is
+ * already `isActive: false`; this keeps it out of the unfiltered legacy read
+ * and out of a shared link to the store.
+ */
+function closedByAdmin(data: Record<string, unknown> | undefined): boolean {
+  return data?.closedByAdminAt != null
+}
+
 async function fetchVendors(): Promise<Vendor[]> {
   try {
     const snap = await getDocs(
@@ -146,6 +155,7 @@ async function fetchVendors(): Promise<Vendor[]> {
       )
       list = all.docs
         .filter((d) => visibleOnCampus(d.data().universityId, campusId))
+        .filter((d) => !closedByAdmin(d.data()))
         .map((d) => vendorFromMap(d.id, d.data()))
         .filter((v) => v.name.trim().length > 0)
         .map(withDistance)
@@ -193,7 +203,7 @@ export async function vendor(storeId: string): Promise<Vendor | null> {
   if (cached) return cached
   try {
     const snap = await getDoc(doc(db, 'stores', storeId))
-    if (!snap.exists()) return null
+    if (!snap.exists() || closedByAdmin(snap.data())) return null
     const v = withDistance(vendorFromMap(snap.id, snap.data()))
     vendorsById.set(storeId, v)
     return v
