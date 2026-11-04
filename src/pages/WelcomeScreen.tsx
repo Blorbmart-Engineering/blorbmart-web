@@ -2,13 +2,15 @@
    Welcome — a port of lib/features/auth/welcome_screen.dart.
    ═══════════════════════════════════════════════════════════════════════ */
 
+import { useAppConfig } from '../store/appConfigStore'
 import { useNavigate } from 'react-router-dom'
-import { HUB_ORDER, VERTICALS } from '../models/catalog'
+import { liveHubs, VERTICALS } from '../models/catalog'
 import { Button } from '../ui/Button'
 import { FadeSlideIn, staggerFor } from '../ui/motion'
 
 export default function WelcomeScreen() {
   const navigate = useNavigate()
+  const billsOn = useAppConfig((s) => s.billPaymentsEnabled)
 
   return (
     <div
@@ -53,7 +55,7 @@ export default function WelcomeScreen() {
           margin: 'var(--gap-xxxl) 0',
         }}
       >
-        {HUB_ORDER.map((id, i) => {
+        {liveHubs(billsOn).map((id, i) => {
           const spec = VERTICALS[id]
           return (
             <FadeSlideIn key={id} delay={140 + staggerFor(i)}>

@@ -2,6 +2,7 @@
    Home furniture — a port of lib/features/home/home_widgets.dart.
    ═══════════════════════════════════════════════════════════════════════ */
 
+import { useAppConfig } from '../store/appConfigStore'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, query, where, limit as fbLimit } from 'firebase/firestore'
@@ -18,7 +19,7 @@ import {
 import { auth, db } from '../lib/firebase'
 import { addressLabel } from '../models/address'
 import {
-  HUB_ORDER,
+  liveHubs,
   VERTICALS,
   isOpenNow,
   type Vendor,
@@ -382,9 +383,10 @@ function SearchBar({ onClick, collapsed }: { onClick: () => void; collapsed: boo
  * hub so they are told apart by colour before they are read.
  */
 export function VerticalGrid({ onSelect }: { onSelect: (v: Vertical) => void }) {
+  const billsOn = useAppConfig((s) => s.billPaymentsEnabled)
   return (
     <div style={{ display: 'flex', gap: 10 }}>
-      {HUB_ORDER.map((id, i) => {
+      {liveHubs(billsOn).map((id, i) => {
         const spec = VERTICALS[id]
         return (
           <FadeSlideIn key={id} delay={staggerFor(i)} style={{ flex: 1, minWidth: 0 }}>

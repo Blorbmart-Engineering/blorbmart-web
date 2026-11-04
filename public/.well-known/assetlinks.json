@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ng.com.blorbmart.app",
+      "sha256_cert_fingerprints": [
+        "60:10:3A:F4:E6:5A:F9:F6:8D:05:AB:64:B1:4E:72:A4:E2:3E:49:7A:FD:B0:AF:1A:FE:E5:3B:AD:8A:EB:FE:A2"
+      ]
+    }
+  }
+]

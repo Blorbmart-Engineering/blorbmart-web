@@ -23,6 +23,7 @@ import {
 } from '../models/cart'
 import type { Vertical } from '../models/catalog'
 import { clamp } from '../lib/format'
+import { track } from '../lib/engagement'
 
 const LOCAL_KEY = 'blorb_cart_v2'
 const SYNC_DEBOUNCE_MS = 2000
@@ -180,6 +181,7 @@ export const useCartStore = create<CartState>((set, get) => {
       } else {
         commit([...lines, line])
       }
+      track({ type: 'add_to_cart', storeId: line.storeId, storeName: line.storeName })
       return true
     },
 

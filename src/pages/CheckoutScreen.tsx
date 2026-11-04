@@ -38,9 +38,11 @@ import { AddressSheet } from '../components/AddressSheet'
 import { PaymentMethodTile, type PayMethod } from '../components/PaymentMethodTile'
 import { useWalletPin } from '../components/WalletPinSheet'
 import { SchedulePicker } from '../components/SchedulePicker'
+import { track } from '../lib/engagement'
 
 export default function CheckoutScreen() {
   const navigate = useNavigate()
+  useEffect(() => track({ type: 'checkout_start' }), [])
   const session = useSessionStore()
   const lines = useCartStore((s) => s.lines)
   const clearCart = useCartStore((s) => s.clear)

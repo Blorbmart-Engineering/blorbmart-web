@@ -100,6 +100,10 @@ export const VERTICALS: Record<Vertical, VerticalSpec> = {
 /** The order the hub grid renders in. */
 export const HUB_ORDER: Vertical[] = ['restaurants', 'pharmacy', 'events', 'bills']
 
+/** HUB_ORDER without the hubs an admin has switched off. */
+export const liveHubs = (billPaymentsEnabled: boolean): Vertical[] =>
+  HUB_ORDER.filter((v) => v !== 'bills' || billPaymentsEnabled)
+
 export function verticalFromId(raw: unknown): Vertical {
   switch (asString(raw).toLowerCase()) {
     case 'pharmacy':
@@ -280,12 +284,15 @@ export function etaLabel(v: Vendor): string {
 }
 
 /**
- * Free delivery is the single strongest conversion lever in food delivery, so
- * it gets its own helper rather than being inferred at each call site.
+ * What a store card says about delivery.
+ *
+ * The backend prices every food delivery by distance at checkout
+ * (foodDeliveryPricingService, never below its minimum fee) and never reads
+ * `stores.deliveryFee`. Cards used to print that field, so nearly every store
+ * showed "Free delivery" when no delivery is free. A free_delivery promo code
+ * is the only way to it, and checkout shows that.
  */
-export function hasFreeDelivery(v: Vendor): boolean {
-  return v.deliveryFee <= 0
-}
+export const DELIVERY_FEE_LABEL = 'Fee by distance'
 
 /* ─────────────────────────────────────────────────────────────────────────
    MenuItem — a dish, a medicine, an event package. Backed by `products`.

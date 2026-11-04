@@ -33,6 +33,7 @@ import { FadeSlideIn, PressScale, useAnimatedNumber } from '../ui/motion'
 import { Confetti } from '../components/gifts/Confetti'
 import { showToast } from '../ui/Screen'
 import { PushPrompt } from '../components/PushPrompt'
+import { flush, track } from '../lib/engagement'
 
 export default function OrderPlaced() {
   const { orderId = '' } = useParams()
@@ -44,6 +45,12 @@ export default function OrderPlaced() {
 
   // Live, so the journey below moves on its own.
   useEffect(() => watchOrder(orderId, setOrder), [orderId])
+
+  // No reminder about a basket that has just become an order.
+  useEffect(() => {
+    track({ type: 'order_placed' })
+    void flush()
+  }, [orderId])
 
   // An order sent to a friend: their link is worth nothing until it reaches
   // them, and this is the moment the sender is looking at the screen.

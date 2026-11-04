@@ -22,8 +22,8 @@ import {
   discountPercent,
   effectivePrice,
   etaLabel,
+  DELIVERY_FEE_LABEL,
   hasDiscount,
-  hasFreeDelivery,
   isOpenNow,
   isSoldOut,
   itemImage,
@@ -87,11 +87,6 @@ export function VendorCard({ vendor, height = 158 }: { vendor: Vendor; height?: 
             <Pill label="Featured" tone="appetite" solid dense icon={<Sparkles size={11} />} />
           </div>
         )}
-        {hasFreeDelivery(vendor) && !closed && (
-          <div style={{ position: 'absolute', top: 'var(--gap-md)', right: 'var(--gap-md)' }}>
-            <Pill label="Free delivery" tone="success" solid dense icon={<Bike size={11} />} />
-          </div>
-        )}
         {closed && (
           <div
             style={{
@@ -143,12 +138,7 @@ export function VendorCard({ vendor, height = 158 }: { vendor: Vendor; height?: 
         }}
       >
         <Meta icon={<Clock size={15} />} label={etaLabel(vendor)} emphasise />
-        <Meta
-          icon={<Bike size={15} />}
-          label={hasFreeDelivery(vendor) ? 'Free' : money(vendor.deliveryFee)}
-          emphasise={hasFreeDelivery(vendor)}
-          color={hasFreeDelivery(vendor) ? 'var(--color-success)' : undefined}
-        />
+        <Meta icon={<Bike size={15} />} label={DELIVERY_FEE_LABEL} />
         {vendor.minOrder > 0 && (
           <Meta icon={<ShoppingBasket size={15} />} label={`Min ${money(vendor.minOrder)}`} />
         )}
@@ -220,13 +210,8 @@ export function VendorRailCard({ vendor, width = 182 }: { vendor: Vendor; width?
           {ratingLabel(vendor)}
         </span>
         <span className="t-caption-sm">&nbsp;•&nbsp;</span>
-        <span
-          className="t-caption-sm clamp-1"
-          style={{
-            color: hasFreeDelivery(vendor) ? 'var(--color-success)' : 'var(--color-ink-muted)',
-          }}
-        >
-          {hasFreeDelivery(vendor) ? 'Free delivery' : money(vendor.deliveryFee)}
+        <span className="t-caption-sm clamp-1" style={{ color: 'var(--color-ink-muted)' }}>
+          {DELIVERY_FEE_LABEL}
         </span>
       </div>
     </PressScale>

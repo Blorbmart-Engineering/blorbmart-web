@@ -178,7 +178,13 @@ self.addEventListener('push', (event) => {
       // rather than stacking five.
       tag: data.tag ?? data.orderId ?? 'blorbmart',
       renotify: true,
-      data: { link: data.link ?? data.route ?? '/home' },
+      // A reminder nudge carries its id on the link, so opening it can be
+      // counted (lib/engagement.ts reads ?nudge=).
+      data: {
+        link: data.nudgeId
+          ? `${data.url ?? '/home'}${String(data.url ?? '').includes('?') ? '&' : '?'}nudge=${encodeURIComponent(data.nudgeId)}`
+          : data.link ?? data.route ?? data.url ?? '/home',
+      },
     }),
   )
 })

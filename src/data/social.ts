@@ -140,5 +140,19 @@ export const ratingApi = {
     foodTags: string[]
     riderTags: string[]
     comment?: string
+    visibility?: 'private' | 'public'
   }) => Api.post('/api/ratings', { body }),
+  /** A store's approved public reviews. */
+  storeReviews: async (storeId: string): Promise<PublicReview[]> => {
+    const data = await Api.get(`/api/ratings/stores/${encodeURIComponent(storeId)}/reviews`, { auth: false })
+    return Array.isArray(data.data) ? (data.data as PublicReview[]) : []
+  },
+}
+
+export interface PublicReview {
+  name: string
+  stars: number
+  tags: string[]
+  comment: string | null
+  createdAt: number | null
 }

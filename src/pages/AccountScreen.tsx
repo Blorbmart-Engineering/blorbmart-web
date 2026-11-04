@@ -14,6 +14,7 @@
    row — which is where the phone already puts a subtitle.
    ═══════════════════════════════════════════════════════════════════════ */
 
+import { useAppConfig } from '../store/appConfigStore'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -40,6 +41,7 @@ import { APP_VERSION } from '../lib/config'
 import { maskPhone } from '../lib/format'
 import { addressLabel } from '../models/address'
 import { PushToggle } from '../components/PushToggle'
+import { ReminderToggle } from '../components/ReminderToggle'
 import { SUPPORT_EMAIL, supportEmailUrl, supportUrl } from '../lib/support'
 import type { University } from '../data/university'
 import {
@@ -69,6 +71,7 @@ const openExternal = (url: string) => window.open(url, '_blank', 'noopener,noref
 
 export default function AccountScreen() {
   const navigate = useNavigate()
+  const billsOn = useAppConfig((s) => s.billPaymentsEnabled)
   const session = useSessionStore()
   const signedIn = isSignedIn(session)
 
@@ -210,12 +213,14 @@ export default function AccountScreen() {
             subtitle="One delivery, everyone pays for their own"
             onClick={() => (signedIn ? setJoinOpen(true) : navigate('/login', { state: { from: '/account' } }))}
           />
-          <Tile
-            icon={<Receipt size={21} aria-hidden />}
-            label="Pay bills"
-            subtitle="Airtime, data, power, TV"
-            onClick={() => navigate('/bills')}
-          />
+          {billsOn && (
+            <Tile
+              icon={<Receipt size={21} aria-hidden />}
+              label="Pay bills"
+              subtitle="Airtime, data, power, TV"
+              onClick={() => navigate('/bills')}
+            />
+          )}
           <Tile
             icon={<Gift size={21} aria-hidden />}
             label="Gift cards"
@@ -248,7 +253,8 @@ export default function AccountScreen() {
             subtitle="Your alerts and messages"
             onClick={() => navigate('/notifications')}
           />
-          <PushToggle last />
+          <PushToggle last={!signedIn} />
+          {signedIn && <ReminderToggle last />}
         </Group>
 
         {/* ── Safety ─────────────────────────────────────────────────── */}

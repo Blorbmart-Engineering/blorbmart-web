@@ -7,13 +7,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Bike, ClipboardList, Clock, Search, ShoppingBasket, Star, Users, UtensilsCrossed } from 'lucide-react'
+import { Bike, ClipboardList, Clock, Search, Share2, ShoppingBasket, Star, Users, UtensilsCrossed } from 'lucide-react'
 import { menuStream, vendor as fetchVendor } from '../data/catalog'
 import { money, titleCase } from '../lib/format'
-import { applySeo, storeSeo } from '../lib/seo'
+import { applySeo, SITE, storeSeo } from '../lib/seo'
+import { shareOrCopy } from '../lib/share'
 import {
+  DELIVERY_FEE_LABEL,
   etaLabel,
-  hasFreeDelivery,
   isOpenNow,
   isSoldOut,
   ratingLabel,
@@ -27,7 +28,7 @@ import { ChipRail, EmptyState, Pill, Skeleton, Stepper } from '../ui/kit'
 import { FadeSlideIn, staggerFor } from '../ui/motion'
 import { AppBar, ScreenBody, showToast } from '../ui/Screen'
 import { Button } from '../ui/Button'
-import { groupApi } from '../data/social'
+import { groupApi, ratingApi, type PublicReview } from '../data/social'
 import { apiErrorMessage } from '../lib/api'
 import { addressToFirestore } from '../models/address'
 import { isSignedIn, useSessionStore } from '../store/sessionStore'
@@ -35,6 +36,7 @@ import { SmartImage } from '../ui/SmartImage'
 import { DishRow } from '../components/CatalogCards'
 import { ItemSheet } from '../components/ItemSheet'
 import { MarketListSheet } from '../components/MarketListSheet'
+import { track } from '../lib/engagement'
 
 export default function VendorScreen() {
   const { id = '' } = useParams()
@@ -45,6 +47,9 @@ export default function VendorScreen() {
   const [section, setSection] = useState('All')
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<MenuItem | null>(null)
+  useEffect(() => {
+    if (open) track({ type: 'product_view', storeId: id })
+  }, [open, id])
   const [listOpen, setListOpen] = useState(false)
   const [missing, setMissing] = useState(false)
 
@@ -87,7 +92,10 @@ export default function VendorScreen() {
     void fetchVendor(id).then((v) => {
       if (cancelled) return
       if (!v) setMissing(true)
-      else setStore(v)
+      else {
+        setStore(v)
+        track({ type: 'store_view', storeId: v.id, storeName: v.name })
+      }
     })
     return () => {
       cancelled = true
@@ -182,9 +190,16 @@ export default function VendorScreen() {
           <IconButton label="Go back" onImage onClick={() => navigate(-1)}>
             <span style={{ fontSize: 18, lineHeight: 1 }}>←</span>
           </IconButton>
-          <IconButton label="Search this menu" onImage onClick={() => navigate('/search')}>
-            <Search size={20} aria-hidden />
-          </IconButton>
+          <div style={{ display: 'flex', gap: 'var(--gap-sm)' }}>
+            {store && (
+              <IconButton label="Share this store" onImage onClick={() => void shareStore(store)}>
+                <Share2 size={19} aria-hidden />
+              </IconButton>
+            )}
+            <IconButton label="Search this menu" onImage onClick={() => navigate('/search')}>
+              <Search size={20} aria-hidden />
+            </IconButton>
+          </div>
         </div>
       </div>
 
@@ -227,11 +242,7 @@ export default function VendorScreen() {
                     label={ratingLabel(store)}
                   />
                   <Meta icon={<Clock size={15} />} label={etaLabel(store)} />
-                  <Meta
-                    icon={<Bike size={15} />}
-                    label={hasFreeDelivery(store) ? 'Free delivery' : money(store.deliveryFee)}
-                    color={hasFreeDelivery(store) ? 'var(--color-success)' : undefined}
-                  />
+                  <Meta icon={<Bike size={15} />} label={DELIVERY_FEE_LABEL} />
                   {store.minOrder > 0 && (
                     <Meta
                       icon={<ShoppingBasket size={15} />}
@@ -439,6 +450,8 @@ export default function VendorScreen() {
             })
           )}
         </div>
+
+        {store && <StoreReviews storeId={store.id} />}
       </ScreenBody>
 
       <ItemSheet item={open} open={open !== null} onClose={() => setOpen(null)} />
@@ -473,5 +486,60 @@ function Meta({
       <span style={{ display: 'inline-flex', color: tone }}>{icon}</span>
       {label}
     </span>
+  )
+}
+
+/**
+ * Shares a store's own address. The same link opens the store in the Android
+ * app when it is installed (an App Link on /r/) and on the web everywhere
+ * else, and shows the store's photo and name when pasted into WhatsApp.
+ */
+async function shareStore(store: Vendor) {
+  const url = `${SITE}/r/${encodeURIComponent(store.id)}`
+  const outcome = await shareOrCopy({
+    title: store.name,
+    text: `Order from ${store.name} on Blorbmart: ${url}`,
+  })
+  if (outcome === 'copied') showToast('Link copied')
+  else if (outcome === 'failed') showToast(url)
+}
+
+/**
+ * What customers chose to say in public, newest first. Only reviews the
+ * customer marked public and moderation let through; nothing renders while
+ * there are none, so a new store is not shown an empty "Reviews" heading.
+ */
+function StoreReviews({ storeId }: { storeId: string }) {
+  const [reviews, setReviews] = useState<PublicReview[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    ratingApi.storeReviews(storeId).then((r) => !cancelled && setReviews(r)).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [storeId])
+
+  if (!reviews.length) return null
+
+  return (
+    <section style={{ padding: 'var(--gap-xl) var(--gap-page) 0' }}>
+      <h2 className="t-h3" style={{ margin: '0 0 var(--gap-md)' }}>What customers say</h2>
+      {reviews.slice(0, 10).map((r, i) => (
+        <div key={i} style={{ padding: 'var(--gap-md) 0', borderTop: i ? '1px solid var(--color-line)' : undefined }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="t-label-sm">{r.name}</span>
+            <span aria-label={`${r.stars} out of 5 stars`} style={{ color: 'var(--color-amber)', fontSize: 13 }}>
+              {'★'.repeat(r.stars)}
+              <span style={{ color: 'var(--color-line)' }}>{'★'.repeat(5 - r.stars)}</span>
+            </span>
+          </div>
+          {r.comment && <p className="t-body-sm" style={{ margin: '4px 0 0' }}>{r.comment}</p>}
+          {r.tags.length > 0 && (
+            <p className="t-caption" style={{ margin: '4px 0 0' }}>{r.tags.join(' · ')}</p>
+          )}
+        </div>
+      ))}
+    </section>
   )
 }

@@ -238,6 +238,7 @@ export function RatingCard({ orderDocId, hasRider, riderName }: { orderDocId: st
   const [foodTags, setFoodTags] = useState<string[]>([])
   const [riderTags, setRiderTags] = useState<string[]>([])
   const [comment, setComment] = useState('')
+  const [visibility, setVisibility] = useState<'private' | 'public'>('private')
   const [sending, setSending] = useState(false)
 
   useEffect(() => {
@@ -274,6 +275,7 @@ export function RatingCard({ orderDocId, hasRider, riderName }: { orderDocId: st
         foodTags,
         riderTags: hasRider && rider ? riderTags : [],
         comment: comment.trim() || undefined,
+        visibility,
       })
       setExisting({ orderDocId, food, rider: hasRider && rider ? rider : null, foodTags, riderTags, comment: comment || null })
       showToast('Thanks — you earned a few Blorb points', 'success')
@@ -312,6 +314,31 @@ export function RatingCard({ orderDocId, hasRider, riderName }: { orderDocId: st
       {food > 0 && (
         <div style={{ marginTop: 'var(--gap-lg)' }}>
           <Field label="Anything else? (optional)" value={comment} onChange={setComment} />
+          {/* Said before sending, never after: who will read this. */}
+          <fieldset style={{ border: 0, padding: 0, margin: 'var(--gap-md) 0' }}>
+            <legend className="t-label-sm" style={{ marginBottom: 6 }}>Who sees your review?</legend>
+            {(
+              [
+                ['private', 'Private', 'Only Blorbmart, and the store and rider without your name.'],
+                ['public', 'Public', 'Shown on the store’s page as your first name and initial.'],
+              ] as const
+            ).map(([value, title, hint]) => (
+              <label key={value} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '6px 0', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name={`visibility-${orderDocId}`}
+                  value={value}
+                  checked={visibility === value}
+                  onChange={() => setVisibility(value)}
+                  style={{ marginTop: 3 }}
+                />
+                <span>
+                  <span className="t-body-sm" style={{ fontWeight: 700 }}>{title}</span>
+                  <span className="t-caption" style={{ display: 'block' }}>{hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
           <Button label="Send rating" busy={sending} onClick={() => void send()} />
         </div>
       )}

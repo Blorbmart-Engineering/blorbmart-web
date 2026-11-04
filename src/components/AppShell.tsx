@@ -5,6 +5,7 @@
    is something in the basket.
    ═══════════════════════════════════════════════════════════════════════ */
 
+import { useAppConfig } from '../store/appConfigStore'
 import type { ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
@@ -54,7 +55,10 @@ const BILLS_TABS: TabSpec[] = [
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const billsOnly = useSessionStore(isBillsOnly)
-  const tabs = billsOnly ? BILLS_TABS : MARKET_TABS
+  const billsOn = useAppConfig((s) => s.billPaymentsEnabled)
+  // While an admin has bills paused, the Bills tab goes rather than staying
+  // as a tab that can only say so.
+  const tabs = billsOnly ? (billsOn ? BILLS_TABS : BILLS_TABS.slice(1)) : MARKET_TABS
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>

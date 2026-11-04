@@ -92,7 +92,9 @@ export function ReceiptPrinter({
   const [fed, setFed] = useState(0)
   const [phase, setPhase] = useState<Phase>('idle')
   const done = useRef(onPrinted)
-  done.current = onPrinted
+  useLayoutEffect(() => {
+    done.current = onPrinted
+  })
 
   // The paper's full length, kept current as the QR code and fonts land.
   useLayoutEffect(() => {
