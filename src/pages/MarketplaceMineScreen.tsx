@@ -160,6 +160,10 @@ function OrderList({ orders, empty, onOpen, onBrowse }: { orders: MarketOrder[];
               </div>
               <Pill tone={orderStatusTone(o.status)} label={orderStatusLabel(o)} dense style={{ marginTop: 6 }} />
             </div>
+            {/* Something waiting on this person: a message, or a yes only they can give. */}
+            {(o.chat?.unread || (o.meetupProposal && o.meetupProposal.by !== o.role) || (o.cancelRequest && o.role === 'seller')) && (
+              <span className="mkt-dot" aria-label="Needs your attention" />
+            )}
             <ChevronRight size={18} aria-hidden style={{ color: 'var(--color-ink-faint)' }} />
           </div>
         </Card>

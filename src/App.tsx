@@ -89,6 +89,7 @@ const SellScreen = lazy(() => import('./pages/SellScreen'))
 const SellerVerifyScreen = lazy(() => import('./pages/SellerVerifyScreen'))
 const MarketplaceMineScreen = lazy(() => import('./pages/MarketplaceMineScreen'))
 const MarketplaceOrderScreen = lazy(() => import('./pages/MarketplaceOrderScreen'))
+const MarketChatScreen = lazy(() => import('./pages/MarketChatScreen'))
 const MarketEarningsScreen = lazy(() => import('./pages/MarketEarningsScreen'))
 
 const AccountScreen = lazy(() => import('./pages/AccountScreen'))
@@ -406,6 +407,8 @@ export default function App() {
               path="/marketplace/orders/:id"
               element={<Protected><Shell><MarketplaceOrderScreen /></Shell></Protected>}
             />
+            {/* Pushed: the message box is a sticky footer. */}
+            <Route path="/marketplace/orders/:id/chat" element={<Protected><MarketChatScreen /></Protected>} />
             <Route
               path="/marketplace/earnings"
               element={<Protected><Shell><MarketEarningsScreen /></Shell></Protected>}

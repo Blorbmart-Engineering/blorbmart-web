@@ -158,3 +158,124 @@ textarea.mkt-input {
   color: var(--color-ink);
   box-shadow: var(--shadow-sm);
 }
+
+/* ── Order chat ─────────────────────────────────────────────────────────── */
+
+.mkt-banner {
+  display: flex;
+  gap: var(--gap-md);
+  padding: var(--gap-md) var(--gap-lg);
+  border-radius: var(--radius-lg);
+  background: var(--color-brand-softer);
+  border: 1px solid var(--color-brand-soft);
+  color: var(--color-ink);
+}
+
+.mkt-banner--warning {
+  background: var(--color-warning-soft);
+  border-color: var(--color-warning-soft);
+}
+
+.mkt-thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-xs);
+  padding: var(--gap-lg) 0;
+}
+
+.mkt-bubble {
+  max-width: min(78%, 420px);
+  padding: 9px 13px;
+  border-radius: 18px;
+  font: 500 15px/1.4 var(--font-sans);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mkt-bubble--mine {
+  align-self: flex-end;
+  background: var(--color-brand);
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+
+.mkt-bubble--theirs {
+  align-self: flex-start;
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+  border-bottom-left-radius: 6px;
+}
+
+.mkt-bubble__time {
+  display: block;
+  margin-top: 2px;
+  font: 500 11px/1.2 var(--font-sans);
+  opacity: 0.7;
+  text-align: right;
+}
+
+.mkt-system {
+  align-self: center;
+  max-width: 88%;
+  margin: var(--gap-sm) 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-muted);
+  font: 500 12.5px/1.4 var(--font-sans);
+  text-align: center;
+}
+
+.mkt-proposal {
+  align-self: center;
+  width: min(100%, 360px);
+  margin: var(--gap-sm) 0;
+  padding: var(--gap-md) var(--gap-lg);
+  border: 1px dashed var(--color-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.mkt-quick {
+  display: flex;
+  gap: var(--gap-sm);
+  overflow-x: auto;
+  padding-bottom: var(--gap-sm);
+  scrollbar-width: none;
+}
+
+.mkt-quick::-webkit-scrollbar {
+  display: none;
+}
+
+.mkt-quick button {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: 600 13px/1 var(--font-sans);
+  cursor: pointer;
+}
+
+.mkt-composer {
+  display: flex;
+  gap: var(--gap-sm);
+  align-items: flex-end;
+}
+
+.mkt-composer textarea.mkt-input {
+  min-height: var(--size-input);
+  max-height: 140px;
+  resize: none;
+}
+
+.mkt-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-danger);
+}

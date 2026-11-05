@@ -51,6 +51,13 @@ export interface MarketOrder {
   buyer: { name: string; phone?: string | null }
   seller: { name: string; phone?: string | null }
   meetupNote: string | null
+  /** The agreed meet-up. `time` is null when only a place was given. */
+  meetup?: { place: string; time: string | null } | null
+  /** A new meet-up one side suggested and the other has not answered yet. */
+  meetupProposal?: { id: string; by: 'buyer' | 'seller'; place: string; time: string | null; at: string | null } | null
+  /** The buyer asking to call off an accepted sale; the seller's yes refunds them. */
+  cancelRequest?: { by: 'buyer'; reason: string | null; at: string | null } | null
+  chat?: MarketChatSummary
   cancelReason: string | null
   cancelledBy: string | null
   dispute: { reason: string; by: string; openedAt: string | null; resolution: { outcome: string; note: string | null } | null } | null
@@ -61,6 +68,30 @@ export interface MarketOrder {
   acceptedAt: string | null
   completedAt: string | null
   cancelledAt: string | null
+}
+
+export interface MarketChatSummary {
+  open: boolean
+  count: number
+  lastText: string | null
+  lastFrom: 'buyer' | 'seller' | 'system' | null
+  lastAt: string | null
+  unread: boolean
+}
+
+export interface MarketMessage {
+  id: string
+  from: 'buyer' | 'seller' | 'system'
+  kind: 'text' | 'system' | 'proposal'
+  text: string | null
+  proposal?: { place: string; time: string | null; status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'replaced' }
+  at: string | null
+}
+
+/** Every chat call answers with the thread (or its newer part) and the order. */
+export interface MarketThread {
+  messages: MarketMessage[]
+  order: MarketOrder
 }
 
 export interface Earnings {
@@ -192,6 +223,36 @@ export const cancelMarketOrder = (id: string, reason: string) => orderAction(id,
 export const handOver = (id: string, pin: string) => orderAction(id, 'handover', { pin })
 export const confirmReceived = (id: string) => orderAction(id, 'received')
 export const disputeMarketOrder = (id: string, reason: string) => orderAction(id, 'dispute', { reason })
+
+/* ── Order chat ───────────────────────────────────────────────────────────
+   `after` is the newest message id the screen already has; the answer then
+   carries only what came after it, which keeps polling cheap. */
+
+const orderPath = (id: string) => `/api/marketplace/orders/${encodeURIComponent(id)}`
+const threadOf = (raw: unknown) => {
+  const t = unwrap<MarketThread>(raw)
+  return { messages: t.messages ?? [], order: t.order }
+}
+
+export const getMarketThread = async (id: string, after?: string) =>
+  threadOf(await Api.get(`${orderPath(id)}/messages${after ? `?after=${encodeURIComponent(after)}` : ''}`))
+
+export const sendMarketMessage = async (id: string, text: string, after?: string) =>
+  threadOf(await Api.post(`${orderPath(id)}/messages`, { body: { text, after } }))
+
+export const proposeMeetup = async (id: string, place: string, time: string | null, after?: string) =>
+  threadOf(await Api.post(`${orderPath(id)}/meetup`, { body: { place, time, after } }))
+
+/** `agree: false` declines it, or withdraws it when it was your own. */
+export const answerMeetup = async (id: string, proposalId: string, agree: boolean, after?: string) =>
+  threadOf(await Api.post(`${orderPath(id)}/meetup/${encodeURIComponent(proposalId)}`, { body: { agree, after } }))
+
+export const requestCancel = async (id: string, reason: string, after?: string) =>
+  threadOf(await Api.post(`${orderPath(id)}/cancel-request`, { body: { reason, after } }))
+
+/** The seller agreeing refunds the buyer; the buyer answering withdraws their request. */
+export const answerCancel = async (id: string, agree: boolean, after?: string) =>
+  threadOf(await Api.post(`${orderPath(id)}/cancel-request/answer`, { body: { agree, after } }))
 
 /* ── Earnings ─────────────────────────────────────────────────────────── */
 

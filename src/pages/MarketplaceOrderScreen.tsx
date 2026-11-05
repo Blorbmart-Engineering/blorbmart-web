@@ -1,9 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════
    One marketplace sale, from whichever side you are on.
 
-   Buyer: the money is held. Once the seller accepts, you can call them and
-   meet; check the item; then read them your handover PIN (or tap "I have
-   it"). That is what pays them.
+   Buyer: the money is held. Message the seller from here (the chat is on
+   its own screen), and once they accept you can call them too and meet;
+   check the item; then read them your handover PIN (or tap "I have it").
+   That is what pays them. Before the handover either side can suggest a new
+   meet-up, and the buyer can ask to cancel; both need the other's yes.
 
    Seller: accept and say where to meet, then type the buyer's PIN at the
    handover. The money lands in your marketplace earnings, which you can
@@ -15,10 +17,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { CircleAlert, MessageCircle, PackageCheck, Phone, Wallet } from 'lucide-react'
+import { CalendarClock, CircleAlert, MessageCircle, PackageCheck, Phone, Undo2, Wallet } from 'lucide-react'
 import { apiErrorMessage } from '../lib/api'
 import { asDate, dayAndTime, money } from '../lib/format'
-import { whatsAppUrl } from '../lib/share'
 import {
   acceptMarketOrder,
   cancelMarketOrder,
@@ -28,6 +29,7 @@ import {
   handOver,
   orderStatusLabel,
   orderStatusTone,
+  requestCancel,
   type MarketOrder,
 } from '../data/marketplace'
 import { Button } from '../ui/Button'
@@ -35,10 +37,11 @@ import { AppBar, ScreenBody, showToast } from '../ui/Screen'
 import { ConfirmDialog, Sheet } from '../ui/Sheet'
 import { Card, EmptyState, Pill, Skeleton, SummaryRow } from '../ui/kit'
 import { ListingPhoto, PinDigits, SafetyNote } from '../components/marketplace/MarketParts'
+import { MeetupSheet, PendingBanners, meetupLabel } from '../components/marketplace/MarketChatParts'
 import { Confetti } from '../components/gifts/Confetti'
 import { PushPrompt } from '../components/PushPrompt'
 
-type Busy = 'accept' | 'cancel' | 'handover' | 'received' | 'dispute' | null
+type Busy = 'accept' | 'cancel' | 'askCancel' | 'handover' | 'received' | 'dispute' | null
 
 export default function MarketplaceOrderScreen() {
   const { id = '' } = useParams()
@@ -48,7 +51,7 @@ export default function MarketplaceOrderScreen() {
 
   const [order, setOrder] = useState<MarketOrder | null | undefined>(undefined)
   const [busy, setBusy] = useState<Busy>(null)
-  const [sheet, setSheet] = useState<'accept' | 'cancel' | 'dispute' | null>(null)
+  const [sheet, setSheet] = useState<'accept' | 'cancel' | 'askCancel' | 'dispute' | 'meetup' | null>(null)
   const [confirmGot, setConfirmGot] = useState(false)
   const [text, setText] = useState('')
   const [pin, setPin] = useState('')
@@ -65,6 +68,20 @@ export default function MarketplaceOrderScreen() {
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  // The other side may write, suggest a meet-up or ask to cancel while this
+  // is open; look again now and then, and whenever the tab comes back.
+  useEffect(() => {
+    const refresh = () => {
+      if (!document.hidden) void load()
+    }
+    const timer = window.setInterval(refresh, 20000)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refresh)
+    }
   }, [load])
 
   const act = async (kind: Exclude<Busy, null>, run: () => Promise<MarketOrder>, done?: string) => {
@@ -107,6 +124,9 @@ export default function MarketplaceOrderScreen() {
   const buyer = order.role === 'buyer'
   const other = buyer ? order.seller : order.buyer
   const live = order.status === 'accepted' || order.status === 'disputed'
+  const chat = order.chat
+  const canMoveMeetup = order.status === 'awaiting_seller' || order.status === 'accepted'
+  const openChat = () => navigate(`/marketplace/orders/${order.id}/chat`)
 
   return (
     <>
@@ -184,27 +204,59 @@ export default function MarketplaceOrderScreen() {
           )}
         </Card>
 
+        {/* ── Waiting on someone's yes ──────────────────────────────────── */}
+        {(order.meetupProposal || order.cancelRequest) && (
+          <div style={{ marginTop: 'var(--gap-lg)' }}>
+            <PendingBanners order={order} onThread={(t) => setOrder(t.order)} />
+          </div>
+        )}
+
         {/* ── The other person ──────────────────────────────────────────── */}
-        {live && other.phone && (
+        {(chat?.open || (chat?.count ?? 0) > 0) && (
           <Card style={{ marginTop: 'var(--gap-lg)' }}>
             <div className="t-overline">{buyer ? 'Seller' : 'Buyer'}</div>
             <div className="t-label-lg" style={{ marginTop: 4 }}>
               {other.name}
             </div>
-            {order.meetupNote && (
-              <p className="t-body-sm" style={{ margin: 'var(--gap-sm) 0 0' }}>
-                <strong>Meet-up:</strong> {order.meetupNote}
+            {order.meetup && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--gap-sm)', marginTop: 'var(--gap-sm)' }}>
+                <p className="t-body-sm" style={{ margin: 0, flex: 1 }}>
+                  <strong>Meet-up:</strong> {meetupLabel(order.meetup)}
+                </p>
+                {canMoveMeetup && (
+                  <Button label="Change" kind="ghost" size="sm" expand={false} onClick={() => setSheet('meetup')} />
+                )}
+              </div>
+            )}
+            {!order.meetup && canMoveMeetup && (
+              <Button
+                label="Suggest a meet-up"
+                kind="ghost"
+                size="sm"
+                expand={false}
+                icon={<CalendarClock size={15} aria-hidden />}
+                style={{ marginTop: 'var(--gap-sm)' }}
+                onClick={() => setSheet('meetup')}
+              />
+            )}
+            {chat?.lastText && (
+              <p className="t-caption clamp-1" style={{ margin: 'var(--gap-sm) 0 0' }}>
+                {chat.unread && <span className="mkt-dot" aria-label="New" style={{ marginRight: 6 }} />}
+                {chat.lastFrom === order.role ? 'You: ' : ''}
+                {chat.lastText}
               </p>
             )}
             <div style={{ display: 'flex', gap: 'var(--gap-sm)', marginTop: 'var(--gap-md)' }}>
-              <Button label="Call" kind="soft" size="md" icon={<Phone size={16} aria-hidden />} onClick={() => (window.location.href = `tel:${other.phone}`)} />
               <Button
-                label="WhatsApp"
-                kind="soft"
+                label={chat?.unread ? 'New message' : 'Message'}
+                kind={chat?.unread ? 'brand' : 'soft'}
                 size="md"
                 icon={<MessageCircle size={16} aria-hidden />}
-                onClick={() => window.open(whatsAppUrl(`Hi, it's about "${order.listing.title}" on Blorbmart.`, other.phone ?? ''), '_blank', 'noopener')}
+                onClick={openChat}
               />
+              {live && other.phone && (
+                <Button label="Call" kind="soft" size="md" icon={<Phone size={16} aria-hidden />} onClick={() => (window.location.href = `tel:${other.phone}`)} />
+              )}
             </div>
           </Card>
         )}
@@ -219,6 +271,9 @@ export default function MarketplaceOrderScreen() {
           )}
           {buyer && order.status === 'awaiting_seller' && <Button label="Cancel and get my money back" kind="outline" onClick={() => setSheet('cancel')} />}
           {buyer && live && <Button label="I have it — pay the seller" glow icon={<PackageCheck size={18} aria-hidden />} onClick={() => setConfirmGot(true)} />}
+          {buyer && order.status === 'accepted' && !order.cancelRequest && (
+            <Button label="Ask the seller to cancel" kind="ghost" icon={<Undo2 size={17} aria-hidden />} onClick={() => setSheet('askCancel')} />
+          )}
           {!buyer && order.status === 'accepted' && <Button label="Cancel this sale" kind="ghost" onClick={() => setSheet('cancel')} />}
           {order.status === 'accepted' && (
             <Button label="Report a problem" kind="ghost" icon={<CircleAlert size={17} aria-hidden />} onClick={() => setSheet('dispute')} />
@@ -249,7 +304,7 @@ export default function MarketplaceOrderScreen() {
       {/* ── Sheets ──────────────────────────────────────────────────────── */}
       <Sheet open={sheet === 'accept'} onClose={() => setSheet(null)} title="Accept and arrange the handover">
         <p className="t-body-sm" style={{ margin: '0 0 var(--gap-md)' }}>
-          Say where and when you can meet. The buyer sees it with your phone number.
+          Say where and when you can meet. The buyer sees it with your phone number, and either of you can suggest a change later.
         </p>
         <textarea
           className="mkt-input"
@@ -289,6 +344,29 @@ export default function MarketplaceOrderScreen() {
           onClick={() => void act('cancel', () => cancelMarketOrder(order.id, text), buyer ? 'Cancelled — your money is back.' : 'Done — the buyer was refunded.')}
         />
       </Sheet>
+
+      <Sheet open={sheet === 'askCancel'} onClose={() => setSheet(null)} title="Ask the seller to cancel?">
+        <p className="t-body-sm" style={{ margin: '0 0 var(--gap-md)' }}>
+          {order.seller.name} has already accepted, so they need to agree. If they do, {money(order.amount)} comes straight back to your wallet.
+        </p>
+        <textarea
+          className="mkt-input"
+          value={text}
+          maxLength={300}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Why? (optional) e.g. My plans changed"
+          style={{ minHeight: 70 }}
+        />
+        <Button
+          label="Ask to cancel"
+          kind="danger"
+          style={{ marginTop: 'var(--gap-md)' }}
+          busy={busy === 'askCancel'}
+          onClick={() => void act('askCancel', async () => (await requestCancel(order.id, text)).order, 'Asked — we’ll tell you what the seller says.')}
+        />
+      </Sheet>
+
+      <MeetupSheet open={sheet === 'meetup'} onClose={() => setSheet(null)} order={order} onThread={(t) => setOrder(t.order)} />
 
       <Sheet open={sheet === 'dispute'} onClose={() => setSheet(null)} title="Report a problem">
         <p className="t-body-sm" style={{ margin: '0 0 var(--gap-md)' }}>
@@ -334,7 +412,7 @@ function NextStep({ order }: { order: MarketOrder }) {
       ? ['Waiting for the seller', `Your ${money(order.amount)} is held. ${order.seller.name} has until ${answerBy ?? 'two days from now'} to accept, or it comes back to you.`]
       : ['Someone wants this', `${order.buyer.name} paid ${money(order.amount)}. It is held until the handover. Accept by ${answerBy ?? 'within 48 hours'}, or it goes back to them.`],
     accepted: buyer
-      ? ['Meet up and check it', 'Call or message the seller to meet. When you have the item and it works, give them your PIN.']
+      ? ['Meet up and check it', 'Message or call the seller to meet. When you have the item and it works, give them your PIN.']
       : ['Meet up and hand it over', 'At the handover, the buyer reads you their 4-digit PIN. Type it below and the money is yours.'],
     disputed: ['With the campus team', `Reported by the ${order.dispute?.by ?? 'buyer'}: “${order.dispute?.reason ?? ''}”. The money stays held until they decide.`],
     completed: buyer
