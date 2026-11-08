@@ -24,6 +24,39 @@ import { Field } from '../components/marketplace/MarketParts'
 type Shot = { url: string | null; preview: string | null; busy: boolean }
 const EMPTY: Shot = { url: null, preview: null, busy: false }
 
+/**
+ * The form, kept for the life of the tab. On a phone short of memory the
+ * browser can drop this page while the camera is open and reload it on the
+ * way back, which used to wipe the name, matric number and the photo already
+ * uploaded. sessionStorage survives that reload; the photo being taken at
+ * that moment cannot be recovered on the web, but nothing before it is lost.
+ */
+type Draft = { name?: string; matric?: string; idUrl?: string | null; selfieUrl?: string | null }
+const DRAFT_KEY = 'market_verify_draft'
+const readDraft = (): Draft => {
+  try {
+    const parsed: unknown = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}')
+    return parsed && typeof parsed === 'object' ? (parsed as Draft) : {}
+  } catch {
+    return {}
+  }
+}
+const writeDraft = (draft: Draft) => {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+  } catch {
+    // Private mode or storage blocked: the form still works, unsaved.
+  }
+}
+const clearDraft = () => {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY)
+  } catch {
+    // ignore
+  }
+}
+const https = (v: unknown): string | null => (typeof v === 'string' && v.startsWith('https://') ? v : null)
+
 export default function SellerVerifyScreen() {
   const navigate = useNavigate()
   const session = useSessionStore()
@@ -41,15 +74,31 @@ export default function SellerVerifyScreen() {
           navigate('/marketplace/sell', { replace: true })
           return
         }
-        setState(s)
         if (s.fullName) setName(s.fullName)
         if (s.matricNumber) setMatric(s.matricNumber)
+        if (s.status === 'unverified' || s.status === 'rejected') {
+          const draft = readDraft()
+          if (draft.name) setName(draft.name)
+          if (draft.matric) setMatric(draft.matric)
+          const idUrl = https(draft.idUrl)
+          const selfieUrl = https(draft.selfieUrl)
+          if (idUrl) setIdShot({ url: idUrl, preview: idUrl, busy: false })
+          if (selfieUrl) setSelfie({ url: selfieUrl, preview: selfieUrl, busy: false })
+        } else {
+          clearDraft()
+        }
+        setState(s)
       })
       .catch((e) => {
         showToast(apiErrorMessage(e, 'Could not check your seller status.'), 'danger')
         navigate('/marketplace', { replace: true })
       })
   }, [navigate])
+
+  const filling = state?.status === 'unverified' || state?.status === 'rejected'
+  useEffect(() => {
+    if (filling) writeDraft({ name: name.trim(), matric: matric.trim(), idUrl: idShot.url, selfieUrl: selfie.url })
+  }, [filling, name, matric, idShot.url, selfie.url])
 
   const take = (set: (s: Shot) => void) => (file: File | undefined) => {
     if (!file) return
@@ -68,7 +117,9 @@ export default function SellerVerifyScreen() {
     if (!idShot.url || !selfie.url) return
     setSending(true)
     try {
-      setState(await applyToSell({ fullName: name.trim(), matricNumber: matric.trim(), idPhotoUrl: idShot.url, selfieUrl: selfie.url }))
+      const next = await applyToSell({ fullName: name.trim(), matricNumber: matric.trim(), idPhotoUrl: idShot.url, selfieUrl: selfie.url })
+      clearDraft()
+      setState(next)
       showToast('Sent — the campus team will check it.', 'success')
     } catch (e) {
       showToast(apiErrorMessage(e, 'Could not send your details.'), 'danger')
