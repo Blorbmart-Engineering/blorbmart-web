@@ -349,7 +349,7 @@ function InviteSheet({ open, d, onClose, onDone }: { open: boolean; d: W.Overvie
       ) : (
         <div>
           <WField label="Who" hint="One person per line: name, then email or phone, then a daily limit if different. You can paste straight from a spreadsheet.">
-            <textarea className={inputClass} value={people} onChange={(e) => setPeople(e.target.value)} placeholder={'Ngozi Okafor, ngozi@hospital.ng\nTunde Bello, 08031234567, 3000'} />
+            <textarea className={inputClass} value={people} onChange={(e) => setPeople(e.target.value)} placeholder={'Ngozi Okafor, ngozi@yourcompany.ng\nTunde Bello, 0803 000 0000, 3000'} />
           </WField>
           {parsed.length > 0 && <p className="t-caption" style={{ margin: '6px 0 0' }}>{parsed.length} {parsed.length === 1 ? 'person' : 'people'}</p>}
           <div className="t-overline" style={sectionTitle}>Their meal settings</div>
@@ -434,6 +434,18 @@ function BillingTab({ d }: { d: W.Overview }) {
 
   const load = useCallback(() => { W.invoices(id).then(setList).catch(() => setList([])) }, [id])
   useEffect(load, [load])
+
+  // A payment changes which choices exist (paying next month removes "Pay for
+  // a month"); keep the form on one that is still offered, or the browser shows
+  // a different option from the one that would be sent.
+  useEffect(() => {
+    if (kind === 'subscription' && d.paidThisMonth && d.paidNextMonth) setKind('topup')
+    else if (kind === 'seats' && !d.paidThisMonth) setKind('subscription')
+    if (month === d.month && d.paidThisMonth) setMonth(d.nextMonth)
+    else if (month === d.nextMonth && d.paidNextMonth && !d.paidThisMonth) setMonth(d.month)
+    // Only when what is paid changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d.paidThisMonth, d.paidNextMonth])
 
   const pay = async (invoiceId: string) => {
     setBusy(invoiceId)
