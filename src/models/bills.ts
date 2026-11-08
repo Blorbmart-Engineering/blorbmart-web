@@ -57,6 +57,26 @@ export interface BillService {
    * real total before anyone taps Pay rather than after.
    */
   fee: number
+  /**
+   * Large bills (electricity, cable TV, exam PINs) pay per started block of
+   * value: flat + perBlock for every started `every` naira. Null = `fee` is
+   * the whole fee. The backend charges by this rule whatever is displayed.
+   */
+  feeRule: { flat: number; every: number; perBlock: number } | null
+}
+
+/** The fee on a purchase of `amount` naira, as the backend will charge it. */
+export function billFee(s: BillService, amount: number): number {
+  const r = s.feeRule
+  if (!r || r.every <= 0) return s.fee
+  return r.flat + Math.max(1, Math.ceil(amount / r.every)) * r.perBlock
+}
+
+function feeRuleFromMap(v: unknown): BillService['feeRule'] {
+  if (!v || typeof v !== 'object') return null
+  const m = v as Record<string, unknown>
+  const every = asDouble(m.every)
+  return every > 0 ? { flat: asDouble(m.flat), every, perBlock: asDouble(m.perBlock) } : null
 }
 
 export function billServiceFromMap(m: Record<string, unknown>): BillService {
@@ -72,6 +92,7 @@ export function billServiceFromMap(m: Record<string, unknown>): BillService {
     max: asDouble(m.max),
     cashbackPercent: asDouble(m.cashbackPercent),
     fee: asDouble(m.fee),
+    feeRule: feeRuleFromMap(m.feeRule),
   }
 }
 

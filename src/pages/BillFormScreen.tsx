@@ -54,6 +54,7 @@ import {
   bundlePeriods,
   bundlesInPeriod,
   type BillVariation,
+  billFee,
 } from '../models/bills'
 import { verifyCustomer } from '../data/bills'
 import { Button } from '../ui/Button'
@@ -187,7 +188,8 @@ export default function BillFormScreen() {
    * airtime is still ₦500 of airtime. Nothing is added to an empty form — a
    * button reading "Pay ₦10" before anything has been chosen would be a lie.
    */
-  const fee = service && payable > 0 ? service.fee : 0
+  // Large bills pay per started ₦5,000, so the fee follows the amount typed.
+  const fee = service && payable > 0 ? billFee(service, payable) : 0
   const total = payable + fee
 
   /** Confirms a meter or smartcard belongs to a real customer. */
@@ -962,8 +964,8 @@ export default function BillFormScreen() {
               <Line label="Valid for" value={details.validity || details.periodLabel} />
             )}
             <Line label="Price" value={money(details.amount)} />
-            {service.fee > 0 && <Line label="Transaction fee" value={money(service.fee)} />}
-            <Line label="You pay" value={money(details.amount + service.fee)} strong />
+            {billFee(service, details.amount) > 0 && <Line label="Transaction fee" value={money(billFee(service, details.amount))} />}
+            <Line label="You pay" value={money(details.amount + billFee(service, details.amount))} strong />
             <div style={{ marginTop: 'var(--gap-xl)' }}>
               <Button
                 label={variation?.code === details.code ? 'Selected' : 'Choose this plan'}
