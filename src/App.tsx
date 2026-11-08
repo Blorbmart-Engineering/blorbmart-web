@@ -84,6 +84,10 @@ const GiftCardScreen = lazy(() => import('./pages/GiftCardScreen'))
 const RedeemGiftScreen = lazy(() => import('./pages/RedeemGiftScreen'))
 
 const MarketplaceScreen = lazy(() => import('./pages/MarketplaceScreen'))
+// Blorbmart for Work: company meal plans.
+const WorkScreen = lazy(() => import('./pages/WorkScreen'))
+const WorkJoinScreen = lazy(() => import('./pages/WorkJoinScreen'))
+const WorkCompanyScreen = lazy(() => import('./pages/WorkCompanyScreen'))
 const ListingScreen = lazy(() => import('./pages/ListingScreen'))
 const SellScreen = lazy(() => import('./pages/SellScreen'))
 const SellerVerifyScreen = lazy(() => import('./pages/SellerVerifyScreen'))
@@ -392,6 +396,11 @@ export default function App() {
             <Route path="/gift" element={<RedeemGiftScreen />} />
 
             {/* ── Student marketplace ────────────────────── */}
+            {/* Blorbmart for Work. The join and company screens carry their own
+                footers and sheets, so they sit outside the Shell. */}
+            <Route path="/work" element={<Protected><Shell><WorkScreen /></Shell></Protected>} />
+            <Route path="/work/join/:code" element={<Protected><WorkJoinScreen /></Protected>} />
+            <Route path="/work/c/:companyId" element={<Protected><WorkCompanyScreen /></Protected>} />
             <Route path="/marketplace" element={<Shell><MarketplaceScreen /></Shell>} />
             {/* Pushed: both end in a sticky footer (Buy, List it), which the
                 shell's tab bar would cover — see /cart. */}

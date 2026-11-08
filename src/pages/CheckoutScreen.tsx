@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Gift, HandCoins, MapPin, Tag, Wallet, X } from 'lucide-react'
+import { Briefcase, Gift, HandCoins, MapPin, Tag, Wallet, X } from 'lucide-react'
 import { ApiError, apiErrorMessage, warmUp } from '../lib/api'
 import { asDouble, asString, money } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
@@ -25,6 +25,7 @@ import {
   type DeliveryTime,
 } from '../data/orders'
 import { askSomeoneToPay } from '../data/payRequests'
+import { payWithWork, workMe, workQuote, type Membership, type Quote } from '../data/work'
 import { clearTreat, saveTreat, treatProblem } from '../data/treats'
 import { balance, invalidateBalance, watchLiveBalance } from '../data/wallet'
 import { addressToFirestore, addressLabel } from '../models/address'
@@ -61,7 +62,16 @@ export default function CheckoutScreen() {
   const [walletBalance, setWalletBalance] = useState(0)
   // 'friend' is not a way of paying so much as a way of not paying: the
   // order is parked and a link goes to whoever will. See data/payRequests.
-  const [method, setMethod] = useState<PayMethod | 'friend'>('paystack')
+  const [method, setMethod] = useState<PayMethod | 'friend' | 'work'>('paystack')
+
+  // Blorbmart for Work: a staff member's meals paid by their employer, up to
+  // a daily limit. The server decides every figure; `quote` is its answer
+  // for this order as it stands (and, for office staff, at their office).
+  const [membership, setMembership] = useState<Membership | null>(null)
+  const [quote, setQuote] = useState<Quote | null>(null)
+  const [quoting, setQuoting] = useState(false)
+  /** Set once a quote has pointed the draft at the office, so leaving work meals writes a fresh draft. */
+  const officeRepointed = useRef(false)
   const [askNote, setAskNote] = useState('')
 
   // Sending the order to somebody else. Saved onto the draft at the moment
@@ -129,6 +139,18 @@ export default function CheckoutScreen() {
    * Waking it while the customer reads the summary moves that cost out of the
    * tap that is supposed to open Paystack.
    */
+  useEffect(() => {
+    let live = true
+    workMe()
+      .then((me) => {
+        if (live && me.membership && me.membership.status === 'active') setMembership(me.membership)
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+
   useEffect(() => {
     warmUp()
     void balance().then(setWalletBalance)
@@ -262,6 +284,65 @@ export default function CheckoutScreen() {
     }
   }, [])
 
+  const workEligible = Boolean(membership) && cartVertical(lines) === 'restaurants' && !treatOn
+
+  // Asks the server what the company covers whenever anything that changes
+  // it changes: the method, the draft, the time, the promo.
+  useEffect(() => {
+    if (method !== 'work' || !orderId) return
+    let live = true
+    setQuoting(true)
+    if (membership?.deliveryMode === 'office') officeRepointed.current = true
+    workQuote(orderId, {
+      promoCode: promoApplied ?? null,
+      ...(when ? { fulfillmentType: 'scheduled', scheduledFor: when } : { fulfillmentType: 'asap' }),
+    })
+      .then((q) => {
+        if (!live || orderIdRef.current !== orderId) return
+        setQuote(q)
+        if (q.totals) {
+          setSubtotal(asDouble(q.totals.subtotal, subtotal))
+          setDeliveryFee(asDouble(q.totals.deliveryFee))
+          setServiceFee(asDouble(q.totals.serviceFee))
+          setDiscount(asDouble(q.totals.discountAmount))
+          setDeliveryDiscount(asDouble(q.totals.deliveryDiscount))
+          setTotal(asDouble(q.totals.totalAmount, total))
+        }
+      })
+      .catch((e) => {
+        if (live) {
+          setQuote({ ok: false, code: null, message: apiErrorMessage(e, 'We could not check your work meal.'), total, covered: 0, staffPays: total })
+        }
+      })
+      .finally(() => {
+        if (live) setQuoting(false)
+      })
+    return () => {
+      live = false
+    }
+    // Re-asked only when what the server prices changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [method, orderId, when, promoApplied])
+
+  // Turning a treat on rules out a work meal; fall back to the card.
+  useEffect(() => {
+    if (treatOn && method === 'work') choose('paystack')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treatOn])
+
+  /** Choosing a way to pay. Leaving work meals after the order was pointed at the office starts a fresh draft at your own address. */
+  function choose(next: PayMethod | 'friend' | 'work') {
+    if (method === 'work' && next !== 'work') {
+      setQuote(null)
+      if (officeRepointed.current) {
+        officeRepointed.current = false
+        draftBasketRef.current = null
+        setDraftAttempt((n) => n + 1)
+      }
+    }
+    setMethod(next)
+  }
+
   const applyPromo = async () => {
     const code = promo.trim()
     if (!code || !orderId) return
@@ -334,11 +415,22 @@ export default function CheckoutScreen() {
       showToast(`Your wallet is short by ${money(total - walletBalance)}.`, 'danger')
       return
     }
+    if (method === 'work') {
+      if (!quote || quoting) return
+      if (!quote.ok) {
+        showToast(quote.message, 'danger')
+        return
+      }
+      if (quote.staffPays > walletBalance) {
+        showToast(`Your work meal covers ${money(quote.covered)}. Top up ${money(quote.staffPays - walletBalance)} to pay the rest.`, 'danger')
+        return
+      }
+    }
 
     // The wallet PIN comes first; backing out of it leaves nothing charged.
     let pin: string | undefined
-    if (method === 'wallet') {
-      pin = (await walletPin.ask(money(total))) ?? undefined
+    if (method === 'wallet' || method === 'work') {
+      pin = (await walletPin.ask(money(method === 'work' ? (quote?.staffPays ?? 0) : total))) ?? undefined
       if (!pin) return
     }
 
@@ -364,6 +456,16 @@ export default function CheckoutScreen() {
 
       if (method === 'wallet') {
         await payWithWallet(orderId, promoApplied ?? undefined, pin, deliverAt)
+        await onPaid(orderId)
+        return
+      }
+
+      if (method === 'work') {
+        await payWithWork(orderId, {
+          ...(promoApplied ? { promoCode: promoApplied } : {}),
+          ...(pin ? { pin } : {}),
+          ...(deliverAt ? { fulfillmentType: 'scheduled', scheduledFor: deliverAt } : { fulfillmentType: 'asap' }),
+        })
         await onPaid(orderId)
         return
       }
@@ -416,6 +518,22 @@ export default function CheckoutScreen() {
         <div className="t-overline" style={{ margin: 'var(--gap-md) 0 var(--gap-sm)' }}>
           Delivering to
         </div>
+        {method === 'work' && membership?.office ? (
+          <Card style={{ display: 'flex', gap: 'var(--gap-md)', alignItems: 'center' }}>
+            <Briefcase size={20} aria-hidden style={{ color: 'var(--color-brand)', flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span className="t-h4 clamp-1" style={{ display: 'block' }}>{membership.office.name}</span>
+              <span className="t-caption clamp-2" style={{ display: 'block' }}>
+                {membership.office.address.addressLine1} · work meals go to your office
+              </span>
+              {membership.office.dropTimes.length > 0 && (
+                <span className="t-caption" style={{ display: 'block', marginTop: 4, color: 'var(--color-brand)' }}>
+                  Usual drop times: {membership.office.dropTimes.join(', ')} — pick one under “When”
+                </span>
+              )}
+            </span>
+          </Card>
+        ) : (
         <PressScale
           scale={0.99}
           onClick={() => setAddressOpen(true)}
@@ -452,6 +570,7 @@ export default function CheckoutScreen() {
             Change
           </span>
         </PressScale>
+        )}
 
         {/* ── When ───────────────────────────────────────────────────── */}
         <div className="t-overline" style={{ margin: 'var(--gap-xl) 0 var(--gap-sm)' }}>
@@ -627,10 +746,29 @@ export default function CheckoutScreen() {
         <div className="t-overline" style={{ margin: 'var(--gap-xl) 0 var(--gap-sm)' }}>
           Pay with
         </div>
+        {workEligible && membership && (
+          <>
+            <PaymentMethodTile
+              method="wallet"
+              selected={method === 'work'}
+              onSelect={() => choose('work')}
+              title={`Work meal · ${membership.company.name}`}
+              subtitle={
+                method === 'work' && quote
+                  ? quote.message
+                  : membership.coverNow
+                    ? `${money(membership.leftToday)} left today`
+                    : membership.reason || 'Not available right now'
+              }
+              icon={<Briefcase size={20} aria-hidden />}
+            />
+            <div style={{ height: 'var(--gap-sm)' }} />
+          </>
+        )}
         <PaymentMethodTile
           method="wallet"
           selected={method === 'wallet'}
-          onSelect={() => setMethod('wallet')}
+          onSelect={() => choose('wallet')}
           title="Blorbmart wallet"
           subtitle={`Balance ${money(walletBalance)}`}
           disabled={walletBalance < total}
@@ -643,7 +781,7 @@ export default function CheckoutScreen() {
         <PaymentMethodTile
           method="paystack"
           selected={method === 'paystack'}
-          onSelect={() => setMethod('paystack')}
+          onSelect={() => choose('paystack')}
           title="Card, transfer or USSD"
           subtitle="Secured by Paystack"
         />
@@ -651,7 +789,7 @@ export default function CheckoutScreen() {
         <PaymentMethodTile
           method="wallet"
           selected={method === 'friend'}
-          onSelect={() => setMethod('friend')}
+          onSelect={() => choose('friend')}
           title="Ask someone to pay"
           subtitle="Send a link to a parent or a friend"
           icon={<HandCoins size={20} aria-hidden />}
@@ -699,6 +837,16 @@ export default function CheckoutScreen() {
             <DashedDivider />
           </div>
           <SummaryRow label="Total" value={pricing ? '…' : money(total)} emphasise />
+          {method === 'work' && quote?.ok && (
+            <>
+              <SummaryRow
+                label={`Paid by ${quote.companyName || 'your employer'}`}
+                value={`−${money(quote.covered)}`}
+                valueColor="var(--color-success)"
+              />
+              <SummaryRow label="You pay from your wallet" value={money(quote.staffPays)} emphasise />
+            </>
+          )}
         </Card>
 
         {error && (
@@ -729,8 +877,14 @@ export default function CheckoutScreen() {
         ) : (
           <Button
             label={
-              pricing
+              pricing || (method === 'work' && quoting)
                 ? 'Working out the total…'
+                : method === 'work'
+                  ? quote?.ok
+                    ? quote.staffPays > 0
+                      ? `Pay ${money(quote.staffPays)} · rest on your work meal`
+                      : 'Pay with my work meal'
+                    : 'Work meal not available'
                 : method === 'friend'
                   ? `Get a link for ${money(total)}`
                   : when && whenLabel
@@ -738,7 +892,7 @@ export default function CheckoutScreen() {
                     : `Pay ${money(total)}`
             }
             busy={paying}
-            disabled={pricing || !orderId || !address}
+            disabled={pricing || !orderId || !address || (method === 'work' && (quoting || !quote?.ok))}
             glow
             onClick={() => void pay()}
           />

@@ -18,6 +18,7 @@ import { useAppConfig } from '../store/appConfigStore'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  Briefcase,
   Bell,
   ChevronRight,
   Download,
@@ -226,6 +227,12 @@ export default function AccountScreen() {
             label="Gift cards"
             subtitle="Send one, or redeem a code"
             onClick={() => navigate('/gifts')}
+          />
+          <Tile
+            icon={<Briefcase size={21} aria-hidden />}
+            label="Blorbmart for Work"
+            subtitle="Meals paid by your employer, or feed your staff"
+            onClick={() => navigate('/work')}
           />
           <Tile
             icon={<ShoppingBag size={21} aria-hidden />}
