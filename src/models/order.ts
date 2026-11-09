@@ -355,8 +355,9 @@ export function orderFromMap(id: string, m: Record<string, unknown>): BlorbOrder
       lines.reduce((n, l) => n + l.quantity, 0),
     ),
     tracking: trackingFromMap(m.tracking),
-    scheduledFor: asString(m.fulfillmentType) === 'scheduled' ? asDate(m.scheduledFor) : null,
-    scheduledLabel: asString(m.fulfillmentType) === 'scheduled' ? asString(m.scheduledLabel) : '',
+    // A pre-order (a day the store cooks) is booked the same way as a picked slot.
+    scheduledFor: ['scheduled', 'preorder'].includes(asString(m.fulfillmentType)) ? asDate(m.scheduledFor) : null,
+    scheduledLabel: ['scheduled', 'preorder'].includes(asString(m.fulfillmentType)) ? asString(m.scheduledLabel) : '',
     waitingForSlot: asString(m.orderStatus ?? m.status).toLowerCase() === 'scheduled',
   }
 }

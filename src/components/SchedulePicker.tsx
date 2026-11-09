@@ -8,12 +8,194 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { CalendarClock, Zap } from 'lucide-react'
-import { scheduleSlots, type DeliveryTime, type ScheduleOptions } from '../data/orders'
+import { CalendarCheck, CalendarClock, Zap } from 'lucide-react'
+import {
+  isPreorderTime,
+  preorderOptions,
+  preorderTime,
+  scheduleSlots,
+  type DeliveryTime,
+  type PreorderOptions,
+  type ScheduleOptions,
+} from '../data/orders'
 import { apiErrorMessage } from '../lib/api'
 import { Skeleton } from '../ui/kit'
 
-export function SchedulePicker({
+/**
+ * Pre-orders (added 2026-11-09). A store can take orders ahead for the days
+ * it cooks (backend preorderService). With one such store in the basket the
+ * second choice here is "Pre-order" and its days; a store that takes nothing
+ * but pre-orders has no "as soon as possible" at all. Pre-order days can only
+ * be shared by one store, so a basket mixing a pre-order-only store with
+ * others is told to split.
+ */
+export function SchedulePicker(props: {
+  storeIds: string[]
+  value: DeliveryTime
+  onChange: (value: DeliveryTime, label: string | null) => void
+  onModeChange?: (mode: 'now' | 'later') => void
+  disabledReason?: string | null
+}) {
+  const { storeIds, value, onChange, onModeChange, disabledReason } = props
+  const storesKey = storeIds.join(',')
+  // null while loading; one entry per store in the basket.
+  const [windows, setWindows] = useState<PreorderOptions[] | null>(null)
+
+  useEffect(() => {
+    if (!storesKey) return
+    let live = true
+    setWindows(null)
+    Promise.all(
+      storesKey.split(',').map((id) =>
+        preorderOptions(id).catch((): PreorderOptions => ({ enabled: false, allowAsap: true, days: [], statusMessage: null })),
+      ),
+    ).then((list) => live && setWindows(list))
+    return () => {
+      live = false
+    }
+  }, [storesKey])
+
+  const single = windows?.length === 1 && windows[0].enabled ? windows[0] : null
+  const preorderOnly = Boolean(windows?.some((w) => w.enabled && !w.allowAsap))
+
+  if (!windows) return <Skeleton height={48} />
+
+  if (single) {
+    return (
+      <PreorderPicker
+        window={single}
+        value={value}
+        onChange={onChange}
+        onModeChange={onModeChange}
+        disabledReason={disabledReason}
+      />
+    )
+  }
+
+  return (
+    <>
+      <SlotPicker {...props} />
+      {preorderOnly && (
+        <p className="t-caption" style={{ margin: '6px 0 0', color: 'var(--color-danger)' }}>
+          A store in your basket only takes pre-orders. Order from it on its own to choose a day.
+        </p>
+      )}
+    </>
+  )
+}
+
+function PreorderPicker({
+  window: w,
+  value,
+  onChange,
+  onModeChange,
+  disabledReason,
+}: {
+  window: PreorderOptions
+  value: DeliveryTime
+  onChange: (value: DeliveryTime, label: string | null) => void
+  onModeChange?: (mode: 'now' | 'later') => void
+  disabledReason?: string | null
+}) {
+  const asapAllowed = w.allowAsap
+  const [chosen, setChosen] = useState<'now' | 'preorder'>(asapAllowed && !isPreorderTime(value) ? 'now' : 'preorder')
+  const mode = disabledReason && asapAllowed ? 'now' : chosen
+
+  const pick = (day: PreorderOptions['days'][number]) => onChange(preorderTime(day.scheduledFor), `Pre-order · ${day.label}`)
+
+  // A pre-order-only store starts on pre-order, with its first day chosen.
+  useEffect(() => {
+    if (mode !== 'preorder') return
+    onModeChange?.('later')
+    if (!isPreorderTime(value) && w.days[0]) pick(w.days[0])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, w])
+
+  const pickMode = (next: 'now' | 'preorder') => {
+    setChosen(next)
+    if (next === 'now') {
+      onModeChange?.('now')
+      onChange(null, null)
+    }
+  }
+
+  return (
+    <div>
+      <div role="radiogroup" aria-label="When" style={{ display: 'grid', gridTemplateColumns: asapAllowed ? '1fr 1fr' : '1fr', gap: 'var(--gap-sm)' }}>
+        {asapAllowed && (
+          <ModeTile active={mode === 'now'} onClick={() => pickMode('now')} icon={<Zap size={18} aria-hidden />} title="As soon as possible" />
+        )}
+        <ModeTile
+          active={mode === 'preorder'}
+          disabled={Boolean(disabledReason) && asapAllowed}
+          onClick={() => pickMode('preorder')}
+          icon={<CalendarCheck size={18} aria-hidden />}
+          title="Pre-order"
+        />
+      </div>
+
+      {disabledReason && asapAllowed && (
+        <p className="t-caption" style={{ margin: '6px 0 0' }}>
+          {disabledReason}
+        </p>
+      )}
+
+      {mode === 'preorder' && (
+        <div style={{ marginTop: 'var(--gap-md)' }}>
+          {!w.days.length ? (
+            <p className="t-caption" style={{ margin: 0 }}>
+              {w.statusMessage || 'Pre-orders are closed for now.'} Check back soon.
+            </p>
+          ) : (
+            <>
+              <div role="radiogroup" aria-label="Pre-order day" style={{ display: 'grid', gap: 'var(--gap-xs)' }}>
+                {w.days.map((day) => {
+                  const active = value === preorderTime(day.scheduledFor)
+                  return (
+                    <button
+                      key={day.scheduledFor}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => pick(day)}
+                      className="press"
+                      style={{
+                        ['--press-scale' as string]: '0.98',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--gap-md)',
+                        padding: 'var(--gap-md) var(--gap-lg)',
+                        borderRadius: 'var(--radius-md)',
+                        textAlign: 'left',
+                        background: active ? 'var(--color-brand-soft)' : 'var(--color-surface)',
+                        border: `1px solid ${active ? 'var(--color-brand)' : 'var(--color-line)'}`,
+                      }}
+                    >
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span className="t-label" style={{ display: 'block', color: active ? 'var(--color-brand-ink)' : 'var(--color-ink)' }}>
+                          {day.label}
+                        </span>
+                        <span className="t-caption" style={{ display: 'block' }}>
+                          Order by {day.cutoffLabel}
+                          {day.ordersRemaining != null && day.ordersRemaining <= 10 ? ` · ${day.ordersRemaining} left` : ''}
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="t-caption" style={{ margin: 'var(--gap-sm) 0 0' }}>
+                You pay now. The kitchen gets your order that morning, and it is delivered from the time shown.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SlotPicker({
   storeIds,
   value,
   onChange,
@@ -57,8 +239,13 @@ export function SchedulePicker({
     }
   }, [mode, storesKey])
 
-  // A held time that is no longer offered (the basket changed store) is let go.
+  // A held time that is no longer offered (the basket changed store) is let go,
+  // and so is a pre-order day held from a store no longer in the basket.
   useEffect(() => {
+    if (isPreorderTime(value)) {
+      onChange(null, null)
+      return
+    }
     if (!value || !options) return
     if (!options.days.some((d) => d.slots.some((s) => s.at === value))) onChange(null, null)
   }, [options, value, onChange])

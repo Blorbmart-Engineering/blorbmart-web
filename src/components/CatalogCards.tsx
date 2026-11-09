@@ -16,7 +16,9 @@ import {
   ShoppingBasket,
   Sparkles,
   Star,
+  Tag,
 } from 'lucide-react'
+import { useStoreDeals } from '../data/storeDeals'
 import { compactCount, money } from '../lib/format'
 import {
   discountPercent,
@@ -49,6 +51,7 @@ import { SmartImage } from '../ui/SmartImage'
 export function VendorCard({ vendor, height = 158 }: { vendor: Vendor; height?: number }) {
   const navigate = useNavigate()
   const closed = !isOpenNow(vendor)
+  const deals = useStoreDeals(vendor.id)
 
   return (
     <PressScale
@@ -87,6 +90,11 @@ export function VendorCard({ vendor, height = 158 }: { vendor: Vendor; height?: 
             <Pill label="Featured" tone="appetite" solid dense icon={<Sparkles size={11} />} />
           </div>
         )}
+        {deals[0] && (
+          <div style={{ position: 'absolute', top: 'var(--gap-md)', right: 'var(--gap-md)', maxWidth: '62%' }}>
+            <Pill label={deals[0].label} tone="success" solid dense icon={<Tag size={11} />} />
+          </div>
+        )}
         {closed && (
           <div
             style={{
@@ -105,7 +113,7 @@ export function VendorCard({ vendor, height = 158 }: { vendor: Vendor; height?: 
                 color: '#fff',
               }}
             >
-              {vendor.acceptsPreorder ? 'Closed · preorder available' : 'Closed right now'}
+              {vendor.acceptsPreorder ? 'Closed · pre-order for later' : 'Closed right now'}
             </span>
           </div>
         )}

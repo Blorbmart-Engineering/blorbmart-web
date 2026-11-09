@@ -7,8 +7,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Bike, ClipboardList, Clock, Search, Share2, ShoppingBasket, Star, Users, UtensilsCrossed } from 'lucide-react'
+import { Bike, CalendarCheck, ClipboardList, Clock, Search, Share2, ShoppingBasket, Star, Tag, Users, UtensilsCrossed } from 'lucide-react'
 import { menuStream, vendor as fetchVendor } from '../data/catalog'
+import { preorderOptions, type PreorderOptions } from '../data/orders'
+import { useStoreDeals } from '../data/storeDeals'
 import { money, titleCase } from '../lib/format'
 import { applySeo, SITE, storeSeo } from '../lib/seo'
 import { shareOrCopy } from '../lib/share'
@@ -43,6 +45,19 @@ export default function VendorScreen() {
   const navigate = useNavigate()
 
   const [store, setStore] = useState<Vendor | null>(null)
+  const deals = useStoreDeals(store?.id)
+  // The store's pre-order window, asked only of a store that takes pre-orders.
+  const [preorder, setPreorder] = useState<PreorderOptions | null>(null)
+  useEffect(() => {
+    if (!store?.id || !store.acceptsPreorder) return
+    let live = true
+    preorderOptions(store.id)
+      .then((p) => live && setPreorder(p))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [store?.id, store?.acceptsPreorder])
   const [items, setItems] = useState<MenuItem[] | null>(null)
   const [section, setSection] = useState('All')
   const [query, setQuery] = useState('')
@@ -265,17 +280,42 @@ export default function VendorScreen() {
                   </div>
                 )}
 
-                {closed && (
-                  <div style={{ marginTop: 'var(--gap-md)' }}>
-                    <Pill
-                      label={
-                        store.acceptsPreorder
-                          ? 'Closed — you can still preorder'
-                          : 'Closed right now'
-                      }
-                      tone="warning"
-                    />
+                {deals.length > 0 && (
+                  <div style={{ display: 'flex', gap: 'var(--gap-xs)', flexWrap: 'wrap', marginTop: 'var(--gap-md)' }}>
+                    {deals.map((d) => (
+                      <Pill key={`${d.kind}-${d.label}`} label={d.label} tone="success" icon={<Tag size={13} aria-hidden />} />
+                    ))}
                   </div>
+                )}
+
+                {preorder?.enabled && preorder.days[0] ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--gap-sm)',
+                      marginTop: 'var(--gap-md)',
+                      padding: 'var(--gap-sm) var(--gap-md)',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--color-brand-softer)',
+                    }}
+                  >
+                    <CalendarCheck size={18} aria-hidden style={{ color: 'var(--color-brand)', flexShrink: 0 }} />
+                    <span className="t-body-sm" style={{ flex: 1 }}>
+                      {closed || !preorder.allowAsap ? '' : 'Or '}
+                      Pre-order for <b>{preorder.days[0].label}</b> · order by {preorder.days[0].cutoffLabel}
+                      {preorder.days.length > 1 ? `, or pick another day at checkout` : ''}
+                    </span>
+                  </div>
+                ) : (
+                  closed && (
+                    <div style={{ marginTop: 'var(--gap-md)' }}>
+                      <Pill
+                        label={preorder?.enabled ? preorder.statusMessage || 'Pre-orders closed for now' : 'Closed right now'}
+                        tone="warning"
+                      />
+                    </div>
+                  )
                 )}
               </div>
             </FadeSlideIn>

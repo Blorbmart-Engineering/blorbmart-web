@@ -7,7 +7,7 @@
    and the application).
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Briefcase, Building2, ChevronRight, Clock, MapPin, UtensilsCrossed, Wallet } from 'lucide-react'
 import { apiErrorMessage } from '../lib/api'
@@ -70,7 +70,10 @@ export default function WorkScreen() {
   return (
     <>
       <AppBar title="Blorbmart for Work" subtitle="Staff meals, paid by your employer" />
-      <ScreenBody padded>
+      {/* Inside the Shell, so the fixed nav bar (and the cart bar, when the
+          basket has something in it) sits over the bottom of the page. The
+          gap keeps "Send application" scrollable clear of both. */}
+      <ScreenBody padded bottomGap="190px">
         {loading ? (
           <>
             <Skeleton height={140} radius="var(--radius-lg)" style={{ marginTop: 'var(--gap-lg)' }} />
@@ -220,8 +223,11 @@ function ApplyForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
   const [form, setForm] = useState({ name: '', kind: 'hospital', campusId: '', contactName: '', contactPhone: '', contactEmail: '', staffEstimate: '', notes: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const top = useRef<HTMLDivElement>(null)
   useEffect(() => {
     void campuses().then(setList).catch(() => setList([]))
+    // The form opens below the pitch, mostly off screen; bring it up.
+    top.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value })
 
@@ -241,7 +247,7 @@ function ApplyForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
 
   return (
     <Card style={{ marginTop: 'var(--gap-lg)' }}>
-      <div className="t-h3">Apply for Blorbmart for Work</div>
+      <div ref={top} className="t-h3" style={{ scrollMarginTop: 90 }}>Apply for Blorbmart for Work</div>
       <p className="t-caption" style={{ margin: '6px 0 0' }}>You become the account owner. We check every organisation before it goes live.</p>
       <WField label="Organisation name"><input className={inputClass} value={form.name} onChange={set('name')} maxLength={80} placeholder="St Mary Hospital" /></WField>
       <WField label="What kind of organisation">

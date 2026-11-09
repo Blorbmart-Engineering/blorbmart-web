@@ -22,6 +22,7 @@ import {
   payWithWallet,
   saveOrderNote,
   startPaystack,
+  whenBody,
   type DeliveryTime,
 } from '../data/orders'
 import { askSomeoneToPay } from '../data/payRequests'
@@ -57,6 +58,13 @@ export default function CheckoutScreen() {
   // is unchanged — the rider is still paid it — and only what the customer
   // is charged comes down. See orderPricingService.applyDeliveryWaiver.
   const [deliveryDiscount, setDeliveryDiscount] = useState(0)
+  // The store discounts an admin set, applied with no code. Already inside
+  // `discount` and `deliveryDiscount`; kept apart only to name them.
+  const [storeDeals, setStoreDeals] = useState<{ goods: number; delivery: number; labels: string[] }>({
+    goods: 0,
+    delivery: 0,
+    labels: [],
+  })
   const [total, setTotal] = useState(cartSubtotal(lines))
 
   const [walletBalance, setWalletBalance] = useState(0)
@@ -172,6 +180,17 @@ export default function CheckoutScreen() {
         const nextService = asDouble(data.serviceFee)
         const nextDiscount = asDouble(data.discountAmount ?? data.discount)
         const nextDeliveryDiscount = asDouble(data.deliveryDiscount)
+        // Store discounts (no code) are inside the two figures above; these
+        // say how much of each, so the summary can name them.
+        const nextStoreDiscount = asDouble(data.storeDiscountAmount)
+        const nextStoreDelivery = asDouble(data.storeDeliveryDiscount)
+        setStoreDeals({
+          goods: nextStoreDiscount,
+          delivery: nextStoreDelivery,
+          labels: (Array.isArray(data.storeDiscountLines) ? data.storeDiscountLines : [])
+            .map((l) => asString((l as Record<string, unknown>)?.label))
+            .filter(Boolean),
+        })
 
         setSubtotal(nextSubtotal)
         setDeliveryFee(nextDelivery)
@@ -189,7 +208,7 @@ export default function CheckoutScreen() {
           // A free-delivery code is applied even though it takes nothing off
           // the goods, so "did it work" cannot be "is the discount above
           // zero" any more.
-          const worked = nextDiscount > 0 || nextDeliveryDiscount > 0
+          const worked = nextDiscount - nextStoreDiscount > 0 || nextDeliveryDiscount - nextStoreDelivery > 0
           setPromoApplied(worked ? code.toUpperCase() : null)
           if (!worked) setPromoError('That code did not apply.')
         }
@@ -295,7 +314,7 @@ export default function CheckoutScreen() {
     if (membership?.deliveryMode === 'office') officeRepointed.current = true
     workQuote(orderId, {
       promoCode: promoApplied ?? null,
-      ...(when ? { fulfillmentType: 'scheduled', scheduledFor: when } : { fulfillmentType: 'asap' }),
+      ...whenBody(when),
     })
       .then((q) => {
         if (!live || orderIdRef.current !== orderId) return
@@ -464,7 +483,7 @@ export default function CheckoutScreen() {
         await payWithWork(orderId, {
           ...(promoApplied ? { promoCode: promoApplied } : {}),
           ...(pin ? { pin } : {}),
-          ...(deliverAt ? { fulfillmentType: 'scheduled', scheduledFor: deliverAt } : { fulfillmentType: 'asap' }),
+          ...whenBody(deliverAt),
         })
         await onPaid(orderId)
         return
@@ -693,11 +712,15 @@ export default function CheckoutScreen() {
             <Tag size={18} aria-hidden style={{ color: 'var(--color-success)' }} />
             <span className="t-label" style={{ flex: 1, color: 'var(--color-success)' }}>
               {promoApplied} ·{' '}
-              {discount > 0 && deliveryDiscount > 0
-                ? `you saved ${money(discount + deliveryDiscount)}`
-                : deliveryDiscount > 0
-                  ? 'delivery is on us'
-                  : `you saved ${money(discount)}`}
+              {(() => {
+                const goods = discount - storeDeals.goods
+                const delivery = deliveryDiscount - storeDeals.delivery
+                return goods > 0 && delivery > 0
+                  ? `you saved ${money(goods + delivery)}`
+                  : delivery > 0
+                    ? 'delivery is on us'
+                    : `you saved ${money(goods)}`
+              })()}
             </span>
             <button
               type="button"
@@ -819,17 +842,24 @@ export default function CheckoutScreen() {
             valueColor={!pricing && deliveryFee <= 0 ? 'var(--color-success)' : undefined}
           />
           {serviceFee > 0 && <SummaryRow label="Service fee" value={money(serviceFee)} />}
-          {discount > 0 && (
+          {storeDeals.goods + storeDeals.delivery > 0 && (
             <SummaryRow
-              label="Discount"
-              value={`−${money(discount)}`}
+              label={storeDeals.labels.length ? `Store deal · ${storeDeals.labels.join(', ')}` : 'Store deal'}
+              value={`−${money(storeDeals.goods + storeDeals.delivery)}`}
               valueColor="var(--color-success)"
             />
           )}
-          {deliveryDiscount > 0 && (
+          {discount - storeDeals.goods > 0 && (
+            <SummaryRow
+              label="Discount"
+              value={`−${money(discount - storeDeals.goods)}`}
+              valueColor="var(--color-success)"
+            />
+          )}
+          {deliveryDiscount - storeDeals.delivery > 0 && (
             <SummaryRow
               label="Delivery waived"
-              value={`−${money(deliveryDiscount)}`}
+              value={`−${money(deliveryDiscount - storeDeals.delivery)}`}
               valueColor="var(--color-success)"
             />
           )}

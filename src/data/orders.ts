@@ -123,18 +123,66 @@ export function payWithWallet(orderId: string, promoCode?: string, pin?: string,
 /* ── Scheduled delivery ───────────────────────────────────────────────── */
 
 /**
- * When the customer wants the order: null for as soon as possible, or one of
- * the slot times `scheduleSlots` offered (an ISO string). The server checks
- * it against the store's hours again at payment.
+ * When the customer wants the order: null for as soon as possible, one of
+ * the slot times `scheduleSlots` offered (an ISO string), or a pre-order day
+ * the store offered (`preorder:` + its ISO time, see `preorderTime`). The
+ * server checks either against the store again at payment.
  */
 export type DeliveryTime = string | null
+
+const PREORDER = 'preorder:'
+
+/** A pre-order day as a DeliveryTime. */
+export const preorderTime = (scheduledFor: string): string => `${PREORDER}${scheduledFor}`
+export const isPreorderTime = (when: DeliveryTime): boolean => Boolean(when?.startsWith(PREORDER))
 
 /**
  * Always says which, so a checkout retried after switching back to "as soon
  * as possible" clears the time the first attempt saved on the draft.
  */
-function whenBody(when?: DeliveryTime) {
-  return when ? { fulfillmentType: 'scheduled', scheduledFor: when } : { fulfillmentType: 'asap' }
+export function whenBody(when?: DeliveryTime) {
+  if (!when) return { fulfillmentType: 'asap' }
+  if (when.startsWith(PREORDER)) return { fulfillmentType: 'preorder', scheduledFor: when.slice(PREORDER.length) }
+  return { fulfillmentType: 'scheduled', scheduledFor: when }
+}
+
+/* ── Pre-orders ───────────────────────────────────────────────────────── */
+
+export interface PreorderDay {
+  date: string
+  scheduledFor: string
+  label: string
+  cutoffLabel: string
+  ordersRemaining: number | null
+}
+
+/** A store's pre-order window (backend preorderService), as customers see it. */
+export interface PreorderOptions {
+  enabled: boolean
+  /** False when the store only takes pre-orders, open or not. */
+  allowAsap: boolean
+  days: PreorderDay[]
+  statusMessage: string | null
+}
+
+export async function preorderOptions(storeId: string): Promise<PreorderOptions> {
+  const data = await Api.get(`/api/stores/${encodeURIComponent(storeId)}/preorder-options`, { auth: false })
+  const options = Array.isArray(data.options) ? data.options : []
+  return {
+    enabled: data.preorderEnabled === true,
+    allowAsap: data.allowAsapWhenOpen !== false,
+    days: options
+      .filter((o): o is Record<string, unknown> => !!o && typeof o === 'object')
+      .map((o) => ({
+        date: asString(o.date),
+        scheduledFor: asString(o.scheduledFor),
+        label: asString(o.label),
+        cutoffLabel: asString(o.cutoffLabel),
+        ordersRemaining: o.ordersRemaining == null ? null : asDouble(o.ordersRemaining),
+      }))
+      .filter((d) => d.scheduledFor),
+    statusMessage: asString(data.statusMessage) || null,
+  }
 }
 
 export interface ScheduleSlot {
