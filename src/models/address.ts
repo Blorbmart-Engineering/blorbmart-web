@@ -69,6 +69,20 @@ export function addressToFirestore(a: DeliveryAddress): Record<string, unknown> 
 /** Short label for the home header: "Zone 4, Osogbo". */
 export function addressLabel(a: DeliveryAddress | null): string {
   if (!a) return 'Set your delivery address'
-  const parts = [a.addressLine1, a.city].filter((e) => e.trim().length > 0)
-  return parts.length === 0 ? a.name : parts.join(', ')
+  // Older saves hold "Dropped pin" or a Plus Code ("QH9W+RH2") as the line.
+  const line = isUnreadableLine(a.addressLine1) ? '' : a.addressLine1
+  const parts = [line || a.addressLine2, a.city].filter((e) => e.trim().length > 0)
+  if (parts.length === 0) return a.lat != null ? `${a.name || 'Pinned location'}` : a.name
+  return parts.join(', ')
+}
+
+const PLUS_CODE = /\b[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}\b/i
+
+/** Empty, "Dropped pin", a Plus Code or bare coordinates: says nothing to a rider. */
+export function isUnreadableLine(text: string | null | undefined): boolean {
+  const s = String(text ?? '').trim()
+  if (!s) return true
+  if (/^(dropped pin|current location|pinned location|pinned spot)$/i.test(s)) return true
+  if (/^-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+$/.test(s)) return true
+  return PLUS_CODE.test(s) && s.replace(PLUS_CODE, '').replace(/[\s,]+/g, '').length < 3
 }

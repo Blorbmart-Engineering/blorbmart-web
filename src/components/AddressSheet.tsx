@@ -8,15 +8,17 @@ import { Check, LocateFixed, MapPin, MapPinned } from 'lucide-react'
 import { auth, db } from '../lib/firebase'
 import {
   addressFromJson,
+  addressLabel,
   addressToFirestore,
   addressToJson,
+  isUnreadableLine,
   type DeliveryAddress,
 } from '../models/address'
+import PinPicker, { type Pin, type Place } from './PinPicker'
 import { sessionPhone, useSessionStore } from '../store/sessionStore'
 import { Button } from '../ui/Button'
 import { PressScale } from '../ui/motion'
 import { Sheet } from '../ui/Sheet'
-import { showToast } from '../ui/Screen'
 import { Spinner } from '../ui/Loader'
 
 export function AddressSheet({
@@ -31,8 +33,7 @@ export function AddressSheet({
   const session = useSessionStore()
   const [saved, setSaved] = useState<DeliveryAddress[]>([])
   const [loading, setLoading] = useState(true)
-  const [locating, setLocating] = useState(false)
-  const [formOpen, setFormOpen] = useState(false)
+  const [formOpen, setFormOpen] = useState<false | 'locate' | 'search'>(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -69,76 +70,35 @@ export function AddressSheet({
     onClose()
   }
 
-  /**
-   * Uses the browser's geolocation. Permission failures are explained rather
-   * than swallowed, because "nothing happened" is the worst outcome here.
-   *
-   * There is no reverse-geocode step on the web — the phone build has a
-   * platform geocoder and the browser does not, and paying a third party to
-   * turn a pin into a street name is not worth it when the rider gets exact
-   * coordinates either way. The customer names the pin instead.
+  /*
+   * Both ways in open the same form with a map on top. "Pin my location"
+   * starts by asking for the device's position; "Enter an address" starts on
+   * the map unpinned, so someone ordering for a friend can search instead.
+   * The pin is what the delivery fee and the rider's route come from, and
+   * the backend names it ("Pink Mosque, Station Road, Shasha") so nobody
+   * sees "Dropped pin" or a code like "QH9W+RH2" again.
    */
-  const useCurrentLocation = () => {
-    if (!('geolocation' in navigator)) {
-      showToast('This browser cannot share your location.', 'danger')
-      return
-    }
-    setLocating(true)
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const address: DeliveryAddress = {
-          docId: '',
-          name: 'Current location',
-          addressLine1: 'Dropped pin',
-          addressLine2: '',
-          city: '',
-          state: '',
-          phone: sessionPhone(session),
-          isDefault: saved.length === 0,
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          deliveryZone: 'off_campus',
-        }
-        const stored = await persist(address)
-        setLocating(false)
-        await select(stored)
-      },
-      (error) => {
-        setLocating(false)
-        const message =
-          error.code === error.PERMISSION_DENIED
-            ? 'Location permission is needed to find your address.'
-            : error.code === error.POSITION_UNAVAILABLE
-              ? 'Could not get your location. Enter your address instead.'
-              : 'That took too long. Enter your address instead.'
-        showToast(message, 'danger')
-      },
-      { enableHighAccuracy: true, timeout: 18_000, maximumAge: 60_000 },
-    )
-  }
-
   const current = session.address
 
   return (
     <>
       <Sheet open={open && !formOpen} onClose={onClose} title="Deliver to">
         <p className="t-body-sm" style={{ margin: '0 0 var(--gap-xl)' }}>
-          Riders use this exactly as written, so be specific.
+          Put the pin on your exact building. It sets the delivery fee and guides the rider.
         </p>
 
         <ActionRow
           icon={<LocateFixed size={20} aria-hidden />}
-          title="Use my current location"
+          title="Pin my location on the map"
           subtitle="Fastest, and most accurate for the rider"
-          busy={locating}
-          onClick={locating ? undefined : useCurrentLocation}
+          onClick={() => setFormOpen('locate')}
         />
         <div style={{ height: 'var(--gap-md)' }} />
         <ActionRow
           icon={<MapPinned size={20} aria-hidden />}
           title="Enter a new address"
-          subtitle="Type a street, area and landmark"
-          onClick={() => setFormOpen(true)}
+          subtitle="Search a place, then pin it on the map"
+          onClick={() => setFormOpen('search')}
         />
 
         {loading ? (
@@ -165,7 +125,9 @@ export function AddressSheet({
       </Sheet>
 
       <AddressForm
-        open={formOpen}
+        open={Boolean(formOpen)}
+        locate={formOpen === 'locate'}
+        isFirst={saved.length === 0}
         onClose={() => setFormOpen(false)}
         onSubmit={async (address) => {
           setFormOpen(false)
@@ -272,10 +234,10 @@ function SavedRow({
       />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span className="t-h4 clamp-1" style={{ display: 'block' }}>
-          {address.name || address.addressLine1}
+          {address.name || addressLabel(address)}
         </span>
         <span className="t-caption clamp-1" style={{ display: 'block' }}>
-          {[address.addressLine1, address.city].filter(Boolean).join(', ')}
+          {addressLabel(address)}
         </span>
       </span>
       {selected && (
@@ -291,10 +253,15 @@ export function AddressForm({
   open,
   onClose,
   onSubmit,
+  locate = false,
+  isFirst = false,
 }: {
   open: boolean
   onClose: () => void
   onSubmit: (address: DeliveryAddress) => void | Promise<void>
+  /** Start by asking for the device's position. */
+  locate?: boolean
+  isFirst?: boolean
 }) {
   const session = useSessionStore()
   const [name, setName] = useState('Home')
@@ -305,13 +272,38 @@ export function AddressForm({
   const [phone, setPhone] = useState(sessionPhone(session))
   const [zone, setZone] = useState('off_campus')
   const [error, setError] = useState<string | null>(null)
+  const [pin, setPin] = useState<Pin | null>(null)
+  // Whether the person has typed the street themselves; until then it follows the pin.
+  const [line1Typed, setLine1Typed] = useState(false)
+
+  // A fresh form each time it opens.
+  useEffect(() => {
+    if (!open) return
+    setName(isFirst ? 'Home' : 'Hostel')
+    setLine1('')
+    setLine2('')
+    setCity('')
+    setState('')
+    setPin(null)
+    setLine1Typed(false)
+    setError(null)
+  }, [open, isFirst])
+
+  const onPin = (next: Pin, place: Place | null) => {
+    setPin(next)
+    if (!place) return
+    if (!line1Typed) setLine1(place.line || place.label)
+    if (place.city) setCity(place.city)
+    if (place.state) setState(place.state)
+  }
 
   const submit = () => {
-    if (line1.trim().length < 4) {
-      setError('Enter the street or building, so a rider can find it.')
+    const street = line1.trim()
+    if (!pin && street.length < 4) {
+      setError('Pin the spot on the map, or type the street or building.')
       return
     }
-    if (!city.trim()) {
+    if (!pin && !city.trim()) {
       setError('Enter the town or city.')
       return
     }
@@ -319,32 +311,40 @@ export function AddressForm({
     void onSubmit({
       docId: '',
       name: name.trim() || 'Address',
-      addressLine1: line1.trim(),
+      addressLine1: street && !isUnreadableLine(street) ? street : 'Pinned location',
       addressLine2: line2.trim(),
       city: city.trim(),
       state: state.trim(),
       phone: phone.trim(),
-      isDefault: false,
-      lat: null,
-      lng: null,
+      isDefault: isFirst,
+      lat: pin?.lat ?? null,
+      lng: pin?.lng ?? null,
       deliveryZone: zone,
     })
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="New address">
+    <Sheet open={open} onClose={onClose} title={locate ? 'Pin your location' : 'New address'}>
+      {open && (
+        <div style={{ marginBottom: 'var(--gap-lg)' }}>
+          <PinPicker onChange={onPin} locateOnOpen={locate} height={300} accent="#AFFF00" />
+        </div>
+      )}
       <Field label="Label" value={name} onChange={setName} placeholder="Home, Hostel, Office" />
       <Field
         label="Street / building"
         value={line1}
-        onChange={setLine1}
-        placeholder="12 Adeyemi Street, Block C"
+        onChange={(v) => {
+          setLine1(v)
+          setLine1Typed(true)
+        }}
+        placeholder={pin ? 'Filled from the pin. Edit if it is off.' : '12 Adeyemi Street, Block C'}
       />
       <Field
-        label="Landmark (optional)"
+        label="Directions for the rider"
         value={line2}
         onChange={setLine2}
-        placeholder="Opposite the main gate"
+        placeholder="Room 12, blue gate opposite the mosque"
       />
       <div style={{ display: 'flex', gap: 'var(--gap-md)' }}>
         <Field label="City" value={city} onChange={setCity} placeholder="Osogbo" />

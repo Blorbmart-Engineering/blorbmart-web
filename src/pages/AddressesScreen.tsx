@@ -8,6 +8,8 @@ import { Check, MapPin, Plus, Trash2 } from 'lucide-react'
 import { auth, db } from '../lib/firebase'
 import {
   addressFromJson,
+  addressLabel,
+  isUnreadableLine,
   addressToFirestore,
   addressToJson,
   type DeliveryAddress,
@@ -144,10 +146,10 @@ export default function AddressesScreen() {
                       />
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span className="t-h4 clamp-1" style={{ display: 'block' }}>
-                          {address.name || address.addressLine1}
+                          {address.name || addressLabel(address)}
                         </span>
                         <span className="t-caption clamp-2" style={{ display: 'block' }}>
-                          {[address.addressLine1, address.addressLine2, address.city]
+                          {[isUnreadableLine(address.addressLine1) ? "" : address.addressLine1, address.addressLine2, address.city]
                             .filter(Boolean)
                             .join(', ')}
                         </span>
