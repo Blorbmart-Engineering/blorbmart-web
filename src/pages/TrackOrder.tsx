@@ -35,8 +35,8 @@ import { StageBar } from '../components/HomeWidgets'
 import { StageIcon } from '../components/StageIcon'
 
 
-// mapbox-gl is the heaviest thing on this screen and only matters once a
-// rider is on the road, so it loads on demand rather than with the page.
+// The map only matters once a rider is on the road, so it loads on demand
+// rather than with the page.
 const LiveRiderMap = lazy(() => import('../components/LiveRiderMap'))
 const MAP_HEIGHT = 240
 

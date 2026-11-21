@@ -4,21 +4,23 @@
    The position comes from order.tracking, which the backend rewrites on
    every rider heartbeat (about every 20s while a trip is on). Nothing here
    polls: the tracking page already streams the order document, so a new
-   position arrives as a new prop.
+   position arrives as a new prop. The ETA beside it is worked out by the
+   backend with Google's Routes API.
+
+   The map is Google Maps' street map, from the same /api/geo/config every
+   pin picker uses (Google Map Tiles when the backend has a key, Esri when
+   it has not), drawn by Leaflet, which the pin picker already ships.
 
    Twenty seconds between fixes would make the marker jump, so each new fix
    is glided to over a second and a half. That is presentation only — the
    marker never goes anywhere the rider has not actually reported being.
-
-   Loaded lazily by TrackOrder: mapbox-gl is heavy, and nobody should pay for
-   it before a rider is actually on the road.
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useRef, useState } from 'react'
-import mapboxgl from 'mapbox-gl'
-import 'mapbox-gl/dist/mapbox-gl.css'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { LocateFixed } from 'lucide-react'
-import { MAPBOX_TOKEN } from '../lib/config'
+import { loadMapConfig } from './PinPicker'
 import type { LatLng } from '../models/order'
 
 const GLIDE_MS = 1500
@@ -30,35 +32,28 @@ const RIDER_SVG =
 const HOME_SVG =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>'
 
-function riderElement(): HTMLElement {
-  const el = document.createElement('div')
-  el.setAttribute('aria-label', 'Your rider')
-  el.style.cssText = 'position:relative;width:40px;height:40px'
+const riderIcon = L.divIcon({
+  className: 'blorb-map-icon',
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
   // The halo sits before the disc in the DOM so the disc paints over it.
-  el.innerHTML =
+  html:
+    '<div aria-label="Your rider" style="position:relative;width:40px;height:40px">' +
     '<span class="blorb-rider-halo"></span>' +
     '<span style="position:absolute;inset:0;display:grid;place-items:center;' +
     'border-radius:50%;background:var(--color-brand);border:3px solid #fff;' +
-    `box-shadow:0 4px 14px rgba(31,119,241,0.45)">${RIDER_SVG}</span>`
-  return el
-}
+    `box-shadow:0 4px 14px rgba(31,119,241,0.45)">${RIDER_SVG}</span></div>`,
+})
 
-function destinationElement(): HTMLElement {
-  const el = document.createElement('div')
-  el.setAttribute('aria-label', 'Your delivery address')
-  el.style.cssText = [
-    'display:grid',
-    'place-items:center',
-    'width:32px',
-    'height:32px',
-    'border-radius:50%',
-    'background:var(--color-appetite)',
-    'border:3px solid #fff',
-    'box-shadow:0 4px 12px rgba(255,90,31,0.4)',
-  ].join(';')
-  el.innerHTML = HOME_SVG
-  return el
-}
+const destinationIcon = L.divIcon({
+  className: 'blorb-map-icon',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  html:
+    '<div aria-label="Your delivery address" style="display:grid;place-items:center;width:32px;height:32px;' +
+    'border-radius:50%;background:var(--color-appetite);border:3px solid #fff;' +
+    `box-shadow:0 4px 12px rgba(255,90,31,0.4)">${HOME_SVG}</div>`,
+})
 
 /** Smoothstep, so the glide eases in and out instead of sliding robotically. */
 const ease = (t: number) => t * t * (3 - 2 * t)
@@ -73,10 +68,11 @@ export default function LiveRiderMap({
   height?: number
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<mapboxgl.Map | null>(null)
-  const riderMarkerRef = useRef<mapboxgl.Marker | null>(null)
-  const destMarkerRef = useRef<mapboxgl.Marker | null>(null)
+  const mapRef = useRef<L.Map | null>(null)
+  const riderMarkerRef = useRef<L.Marker | null>(null)
+  const destMarkerRef = useRef<L.Marker | null>(null)
   const glideRef = useRef<number | null>(null)
+  const [ready, setReady] = useState(false)
 
   /**
    * Once the customer pans or zooms, the map stops re-framing itself on
@@ -90,10 +86,9 @@ export default function LiveRiderMap({
     followingRef.current = value
     setFollowingState(value)
   }
-  const [failed, setFailed] = useState(false)
 
-  // What the map's 'load' callback frames — it fires after mount, by which
-  // time a newer position may already have arrived.
+  // What the map frames once its config arrives — a newer position may
+  // already have come in by then.
   const latest = useRef({ rider, destination })
   useEffect(() => {
     latest.current = { rider, destination }
@@ -101,53 +96,59 @@ export default function LiveRiderMap({
 
   // ── Create the map once ───────────────────────────────────────────────
   useEffect(() => {
-    if (!containerRef.current || !MAPBOX_TOKEN) return
+    let cancelled = false
+    let resizeObs: ResizeObserver | null = null
+    void loadMapConfig().then((cfg) => {
+      const box = containerRef.current
+      if (cancelled || !box) return
+      const { rider: r, destination: d } = latest.current
+      const map = L.map(box, {
+        center: [r.lat, r.lng],
+        zoom: 15,
+        maxZoom: cfg.maxZoom,
+        zoomControl: false,
+        attributionControl: true,
+        // A one-finger drag on a phone should scroll the page, not the map:
+        // on phones panning starts after a tap; pinch-zoom always works.
+        dragging: !L.Browser.mobile,
+        scrollWheelZoom: false,
+      })
+      map.attributionControl.setPrefix(false)
+      const layer = cfg.layers.streets
+      const common = { maxZoom: cfg.maxZoom, maxNativeZoom: layer.maxNativeZoom }
+      L.tileLayer(layer.url, { ...common, attribution: layer.attribution }).addTo(map)
+      layer.overlays.forEach((url, i) => L.tileLayer(url, { ...common, zIndex: 2 + i }).addTo(map))
 
-    mapboxgl.accessToken = MAPBOX_TOKEN
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [rider.lng, rider.lat],
-      zoom: 14.5,
-      attributionControl: false,
-      // A one-finger drag on a phone should scroll the page, not the map.
-      cooperativeGestures: true,
-      pitchWithRotate: false,
-      dragRotate: false,
+      // Only a person's drag or zoom stops following; frame() marks the
+      // moves it makes itself so they do not count.
+      const byPerson = () => {
+        if (!selfMoves.has(map)) setFollowing(false)
+      }
+      map.on('dragstart', byPerson)
+      map.on('zoomstart', byPerson)
+      map.on('click', () => map.dragging.enable())
+
+      riderMarkerRef.current = L.marker([r.lat, r.lng], { icon: riderIcon, keyboard: false, zIndexOffset: 1000 }).addTo(map)
+      if (d) destMarkerRef.current = L.marker([d.lat, d.lng], { icon: destinationIcon, keyboard: false }).addTo(map)
+
+      mapRef.current = map
+      frame(map, r, d, false)
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObs = new ResizeObserver(() => map.invalidateSize())
+        resizeObs.observe(box)
+      }
+      setReady(true)
     })
-    map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left')
-
-    // Only a person's gesture carries an originalEvent; our own fitBounds
-    // and easeTo calls do not, and must not switch following off.
-    const stopFollowing = (e: object) => {
-      if ('originalEvent' in e && e.originalEvent) setFollowing(false)
-    }
-    map.on('dragstart', stopFollowing)
-    map.on('zoomstart', stopFollowing)
-
-    map.on('error', (e) => {
-      // A bad or URL-restricted token fails the style load. Drop the map
-      // rather than show a grey rectangle; the ETA card still says it all.
-      const status = (e.error as { status?: number } | undefined)?.status
-      if (status === 401 || status === 403) setFailed(true)
-    })
-
-    riderMarkerRef.current = new mapboxgl.Marker({ element: riderElement() })
-      .setLngLat([rider.lng, rider.lat])
-      .addTo(map)
-
-    mapRef.current = map
-    map.once('load', () => frame(map, latest.current.rider, latest.current.destination, false))
 
     return () => {
+      cancelled = true
+      resizeObs?.disconnect()
       if (glideRef.current) cancelAnimationFrame(glideRef.current)
-      map.remove()
+      mapRef.current?.remove()
       mapRef.current = null
       riderMarkerRef.current = null
       destMarkerRef.current = null
     }
-    // The map is built once; later positions arrive through the effects below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Destination pin ───────────────────────────────────────────────────
@@ -160,13 +161,11 @@ export default function LiveRiderMap({
       return
     }
     if (!destMarkerRef.current) {
-      destMarkerRef.current = new mapboxgl.Marker({ element: destinationElement() })
-        .setLngLat([destination.lng, destination.lat])
-        .addTo(map)
+      destMarkerRef.current = L.marker([destination.lat, destination.lng], { icon: destinationIcon, keyboard: false }).addTo(map)
     } else {
-      destMarkerRef.current.setLngLat([destination.lng, destination.lat])
+      destMarkerRef.current.setLatLng([destination.lat, destination.lng])
     }
-  }, [destination?.lat, destination?.lng]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, destination?.lat, destination?.lng]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Glide the rider to each new fix ───────────────────────────────────
   useEffect(() => {
@@ -174,7 +173,7 @@ export default function LiveRiderMap({
     const marker = riderMarkerRef.current
     if (!map || !marker) return
 
-    const from = marker.getLngLat()
+    const from = marker.getLatLng()
     const to = { lng: rider.lng, lat: rider.lat }
     if (from.lng === to.lng && from.lat === to.lat) return
 
@@ -182,7 +181,7 @@ export default function LiveRiderMap({
     const start = performance.now()
     const step = (t: number) => {
       const k = ease(Math.min(1, (t - start) / GLIDE_MS))
-      marker.setLngLat([from.lng + (to.lng - from.lng) * k, from.lat + (to.lat - from.lat) * k])
+      marker.setLatLng([from.lat + (to.lat - from.lat) * k, from.lng + (to.lng - from.lng) * k])
       if (k < 1) glideRef.current = requestAnimationFrame(step)
       else glideRef.current = null
     }
@@ -190,8 +189,6 @@ export default function LiveRiderMap({
 
     if (followingRef.current) frame(map, rider, destination, true)
   }, [rider.lat, rider.lng]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!MAPBOX_TOKEN || failed) return null
 
   return (
     <div
@@ -203,9 +200,11 @@ export default function LiveRiderMap({
         border: '1px solid var(--color-line)',
         boxShadow: 'var(--shadow-sm)',
         background: 'var(--color-surface)',
+        isolation: 'isolate',
       }}
     >
       <style>{`
+        .blorb-map-icon { background: none; border: 0; }
         .blorb-rider-halo {
           position: absolute; inset: -3px; border-radius: 50%;
           background: rgba(31,119,241,0.35);
@@ -218,9 +217,10 @@ export default function LiveRiderMap({
         @media (prefers-reduced-motion: reduce) {
           .blorb-rider-halo { animation: none; opacity: 0; }
         }
+        .blorb-live-map .leaflet-control-attribution { font-size: 9.5px; background: rgba(255,255,255,.75); }
       `}</style>
 
-      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+      <div ref={containerRef} className="blorb-live-map" style={{ position: 'absolute', inset: 0, zIndex: 0 }} />
 
       {!following && (
         <button
@@ -234,6 +234,7 @@ export default function LiveRiderMap({
             position: 'absolute',
             right: 10,
             bottom: 10,
+            zIndex: 500,
             display: 'grid',
             placeItems: 'center',
             width: 40,
@@ -253,17 +254,21 @@ export default function LiveRiderMap({
   )
 }
 
+/** Maps in the middle of a move frame() started, so it is not taken for a gesture. */
+const selfMoves = new WeakSet<L.Map>()
+
 /** Frames the rider and the drop-off together, or just the rider. */
-function frame(map: mapboxgl.Map, rider: LatLng, destination: LatLng | null, animate: boolean) {
+function frame(map: L.Map, rider: LatLng, destination: LatLng | null, animate: boolean) {
+  selfMoves.add(map)
+  map.once('moveend', () => selfMoves.delete(map))
+  // A move to where the map already is fires no moveend; clear it anyway.
+  window.setTimeout(() => selfMoves.delete(map), animate ? 1200 : 50)
   if (!destination) {
-    map.easeTo({ center: [rider.lng, rider.lat], duration: animate ? 800 : 0 })
+    map.setView([rider.lat, rider.lng], Math.max(map.getZoom(), 15), { animate })
     return
   }
-  const bounds = new mapboxgl.LngLatBounds([rider.lng, rider.lat], [rider.lng, rider.lat])
-  bounds.extend([destination.lng, destination.lat])
-  map.fitBounds(bounds, {
-    padding: FIT_PADDING,
-    maxZoom: 16,
-    duration: animate ? 800 : 0,
-  })
+  map.fitBounds(
+    L.latLngBounds([rider.lat, rider.lng], [destination.lat, destination.lng]),
+    { padding: [FIT_PADDING, FIT_PADDING], maxZoom: 16, animate },
+  )
 }
