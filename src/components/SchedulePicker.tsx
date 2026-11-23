@@ -374,7 +374,7 @@ function SlotPicker({
   )
 }
 
-function ModeTile({
+export function ModeTile({
   active,
   disabled = false,
   onClick,

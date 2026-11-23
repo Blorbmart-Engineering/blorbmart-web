@@ -43,17 +43,26 @@ export async function createOrder({
   address,
   note,
   vertical = 'restaurants',
+  deliveryMethod = 'delivery',
 }: {
   lines: CartLine[]
-  address: Record<string, unknown>
+  /** Optional for a pick-up order: the customer is coming to the store. */
+  address: Record<string, unknown> | null
   note?: string
   vertical?: Vertical
+  deliveryMethod?: DeliveryMethod
 }): Promise<string> {
   if (!auth.currentUser) throw new ApiError('Please sign in to order.')
   if (!lines.length) throw new ApiError('Your basket is empty.')
 
   const data = await Api.post('/api/orders/draft', {
-    body: { lines: lines.map(cartLineToMap), address, vertical, ...(note ? { note } : {}) },
+    body: {
+      lines: lines.map(cartLineToMap),
+      ...(address ? { address } : {}),
+      vertical,
+      deliveryMethod,
+      ...(note ? { note } : {}),
+    },
   })
   const orderId = asString(data.orderId)
   if (!orderId) throw new ApiError('We could not start your order. Try again.')
@@ -79,11 +88,17 @@ export async function saveOrderNote(orderId: string, note: string): Promise<void
  * when the customer removed a code got the discount handed straight back to
  * it. Sending an explicit null is what clears it.
  */
-export function calculatePricing(orderId: string, promoCode?: string) {
+export function calculatePricing(orderId: string, promoCode?: string, deliveryMethod?: DeliveryMethod) {
   return Api.post(`/api/orders/${encodeURIComponent(orderId)}/calculate`, {
-    body: { promoCode: promoCode?.trim() ? promoCode.trim() : null },
+    body: { promoCode: promoCode?.trim() ? promoCode.trim() : null, ...(deliveryMethod ? { deliveryMethod } : {}) },
   })
 }
+
+/**
+ * Delivered by a rider, or collected from the store by the customer. Sent
+ * with every price and payment request so the server and the screen agree.
+ */
+export type DeliveryMethod = 'delivery' | 'pickup'
 
 /**
  * `returnPath` is where Paystack should drop the customer once they have paid.
@@ -96,13 +111,14 @@ export function calculatePricing(orderId: string, promoCode?: string) {
  * A path, not a URL: the server joins it to the request's own Origin, so this
  * cannot be used to redirect somebody off-site.
  */
-export function startPaystack(orderId: string, promoCode?: string, when?: DeliveryTime) {
+export function startPaystack(orderId: string, promoCode?: string, when?: DeliveryTime, deliveryMethod?: DeliveryMethod) {
   return Api.post('/api/orders/checkout/paystack', {
     body: {
       orderId,
       returnPath: `/order-placed/${orderId}`,
       ...(promoCode ? { promoCode } : {}),
       ...whenBody(when),
+      ...(deliveryMethod ? { deliveryMethod } : {}),
     },
   })
 }
@@ -114,9 +130,15 @@ export function verifyPaystack(reference: string, orderId: string) {
 }
 
 /** `pin` is the wallet PIN, which the backend checks before debiting. */
-export function payWithWallet(orderId: string, promoCode?: string, pin?: string, when?: DeliveryTime) {
+export function payWithWallet(orderId: string, promoCode?: string, pin?: string, when?: DeliveryTime, deliveryMethod?: DeliveryMethod) {
   return Api.post('/api/orders/checkout/wallet', {
-    body: { orderId, ...(promoCode ? { promoCode } : {}), ...(pin ? { pin } : {}), ...whenBody(when) },
+    body: {
+      orderId,
+      ...(promoCode ? { promoCode } : {}),
+      ...(pin ? { pin } : {}),
+      ...whenBody(when),
+      ...(deliveryMethod ? { deliveryMethod } : {}),
+    },
   })
 }
 

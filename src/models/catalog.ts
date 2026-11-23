@@ -147,6 +147,8 @@ export interface Vendor {
   isActive: boolean
   isFeatured: boolean
   acceptsPreorder: boolean
+  /** The vendor lets customers collect orders themselves, with no delivery fee. */
+  pickupEnabled: boolean
   address: string
   city: string
   latitude: number | null
@@ -211,6 +213,7 @@ export function vendorFromMap(id: string, m: Record<string, unknown>): Vendor {
     isActive: asBool(m.isActive, true),
     isFeatured: asBool(m.isFeatured),
     acceptsPreorder: asBool(m.acceptsPreorder),
+    pickupEnabled: m.pickupEnabled === true,
     address: asString(m.address),
     city: asString(m.city),
     latitude,

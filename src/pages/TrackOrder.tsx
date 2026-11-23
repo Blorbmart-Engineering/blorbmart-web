@@ -5,7 +5,7 @@
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { BadgeCheck, CalendarX, Lock, MessageCircle, Package, Phone, ReceiptText, RotateCcw } from 'lucide-react'
+import { BadgeCheck, CalendarX, Lock, MessageCircle, Package, Phone, ReceiptText, RotateCcw, Store } from 'lucide-react'
 import { SosCard } from '../components/SafetySheet'
 import { supportUrl } from '../lib/support'
 import { RatingCard } from '../components/Social'
@@ -218,8 +218,8 @@ export default function TrackOrder() {
                       : trackingDistanceLabel(order.tracking)
                       ? `${trackingDistanceLabel(order.tracking)} away`
                       : minutesLeft != null && minutesLeft > 0
-                        ? 'estimated arrival'
-                        : 'arriving any moment'}
+                        ? order.pickup ? 'until it is ready' : 'estimated arrival'
+                        : order.pickup ? 'ready any moment' : 'arriving any moment'}
                   </span>
                 </div>
               </>
@@ -265,10 +265,43 @@ export default function TrackOrder() {
             </FadeSlideIn>
           )}
 
+        {/* ── Where to collect a pick-up order ─────────────────────────── */}
+        {order.pickup && !isTerminal(order.stage) && (
+          <FadeSlideIn delay={60}>
+            <Card style={{ marginTop: 'var(--gap-lg)', display: 'flex', gap: 'var(--gap-md)', alignItems: 'center' }}>
+              <Store size={20} aria-hidden style={{ color: 'var(--color-brand)', flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="t-overline" style={{ display: 'block' }}>Collect from</span>
+                <span className="t-h4 clamp-1" style={{ display: 'block' }}>
+                  {order.pickupPoint?.storeName || order.storeName}
+                </span>
+                {order.pickupPoint?.address && (
+                  <span className="t-caption clamp-2" style={{ display: 'block' }}>{order.pickupPoint.address}</span>
+                )}
+              </span>
+              {order.pickupPoint?.latitude != null && order.pickupPoint?.longitude != null && (
+                <a
+                  className="t-label"
+                  style={{ color: 'var(--color-brand)', flexShrink: 0 }}
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${order.pickupPoint.latitude},${order.pickupPoint.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Directions
+                </a>
+              )}
+            </Card>
+          </FadeSlideIn>
+        )}
+
         {/* ── PIN ────────────────────────────────────────────────────── */}
         {showsPin(order) && (
           <FadeSlideIn delay={80}>
-            <PinCard orderId={order.id} urgent={order.stage === 'arrived'} />
+            <PinCard
+              orderId={order.id}
+              pickup={order.pickup}
+              urgent={order.pickup ? order.stage === 'ready' : order.stage === 'arrived'}
+            />
           </FadeSlideIn>
         )}
 
@@ -458,7 +491,7 @@ export default function TrackOrder() {
  * authenticated API, here, where the customer has actually navigated to look
  * at them.
  */
-function PinCard({ orderId, urgent }: { orderId: string; urgent: boolean }) {
+function PinCard({ orderId, urgent, pickup = false }: { orderId: string; urgent: boolean; pickup?: boolean }) {
   const [pin, setPin] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -490,7 +523,9 @@ function PinCard({ orderId, urgent }: { orderId: string; urgent: boolean }) {
         className="t-overline"
         style={{ color: urgent ? 'var(--color-appetite-deep)' : 'var(--color-ink-muted)' }}
       >
-        {urgent ? 'Give the rider this PIN' : 'Your delivery PIN'}
+        {pickup
+          ? urgent ? 'Show this code at the counter' : 'Your pick-up code'
+          : urgent ? 'Give the rider this PIN' : 'Your delivery PIN'}
       </div>
 
       <div
@@ -539,9 +574,11 @@ function PinCard({ orderId, urgent }: { orderId: string; urgent: boolean }) {
       >
         <Lock size={14} aria-hidden style={{ color: 'var(--color-ink-muted)' }} />
         <span className="t-caption">
-          {urgent
-            ? 'Only share it when your food is in your hand.'
-            : 'The delivery cannot be closed without it.'}
+          {pickup
+            ? 'The store hands over your order only with this code.'
+            : urgent
+              ? 'Only share it when your food is in your hand.'
+              : 'The delivery cannot be closed without it.'}
         </span>
       </div>
     </div>

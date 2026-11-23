@@ -214,6 +214,23 @@ export async function vendor(storeId: string): Promise<Vendor | null> {
 }
 
 /**
+ * The store as it is right now, skipping the cache: checkout asks whether it
+ * offers pick-up, and a vendor who switched it on a minute ago should count.
+ */
+export async function freshVendor(storeId: string): Promise<Vendor | null> {
+  try {
+    const snap = await getDoc(doc(db, 'stores', storeId))
+    if (!snap.exists() || closedByAdmin(snap.data())) return null
+    const v = withDistance(vendorFromMap(snap.id, snap.data()))
+    vendorsById.set(storeId, v)
+    return v
+  } catch (e) {
+    console.warn(`[catalog] freshVendor(${storeId}) failed`, e)
+    return cachedVendor(storeId)
+  }
+}
+
+/**
  * The default browse order. Extracted so home, hub and search all agree:
  * open first, then nearest, then featured, then best rated.
  */

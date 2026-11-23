@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Briefcase, Gift, HandCoins, MapPin, Tag, Wallet, X } from 'lucide-react'
+import { Bike, Briefcase, Gift, HandCoins, MapPin, Store, Tag, Wallet, X } from 'lucide-react'
 import { ApiError, apiErrorMessage, warmUp } from '../lib/api'
 import { asDouble, asString, money } from '../lib/format'
 import { goToPaystack } from '../lib/payment'
@@ -23,8 +23,11 @@ import {
   saveOrderNote,
   startPaystack,
   whenBody,
+  type DeliveryMethod,
   type DeliveryTime,
 } from '../data/orders'
+import { freshVendor } from '../data/catalog'
+import type { Vendor } from '../models/catalog'
 import { askSomeoneToPay } from '../data/payRequests'
 import { payWithWork, workMe, workQuote, type Membership, type Quote } from '../data/work'
 import { clearTreat, saveTreat, treatProblem } from '../data/treats'
@@ -39,7 +42,7 @@ import { AppBar, ScreenBody, StickyFooter, showToast } from '../ui/Screen'
 import { AddressSheet } from '../components/AddressSheet'
 import { PaymentMethodTile, type PayMethod } from '../components/PaymentMethodTile'
 import { useWalletPin } from '../components/WalletPinSheet'
-import { SchedulePicker } from '../components/SchedulePicker'
+import { ModeTile, SchedulePicker } from '../components/SchedulePicker'
 import { track } from '../lib/engagement'
 
 export default function CheckoutScreen() {
@@ -142,6 +145,35 @@ export default function CheckoutScreen() {
   const storeIdsKey = [...new Set(lines.map((l) => l.storeId))].join(',')
   const storeIds = useMemo(() => (storeIdsKey ? storeIdsKey.split(',') : []), [storeIdsKey])
 
+  /*
+   * Pick-up: the customer collects from the store and pays no delivery fee.
+   * Offered only for a one-store basket from a store whose vendor switched it
+   * on, and not for a treat (the friend is elsewhere) or a work meal (it goes
+   * to the office). The server checks all of this again before charging.
+   */
+  // Keyed by the basket's stores, so a basket that changed store never shows
+  // the last store's answer.
+  const [pickupLookup, setPickupLookup] = useState<{ key: string; store: Vendor | null }>({ key: '', store: null })
+  const pickupStore = pickupLookup.key === storeIdsKey ? pickupLookup.store : null
+  const [wantsPickup, setWantsPickup] = useState(false)
+  useEffect(() => {
+    if (storeIds.length !== 1 || cartVertical(lines) === 'market') return
+    let live = true
+    const key = storeIdsKey
+    void freshVendor(storeIds[0]).then((v) => {
+      if (live) setPickupLookup({ key, store: v?.pickupEnabled && v.vertical !== 'market' ? v : null })
+    })
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeIdsKey])
+  const pickupAllowed = Boolean(pickupStore) && !treatOn && method !== 'work'
+  const isPickup = wantsPickup && pickupAllowed
+  const deliveryMethod: DeliveryMethod = isPickup ? 'pickup' : 'delivery'
+  const methodRef = useRef<DeliveryMethod>('delivery')
+  methodRef.current = deliveryMethod
+
   /**
    * The backend sleeps, and its first request costs about twenty seconds.
    * Waking it while the customer reads the summary moves that cost out of the
@@ -171,7 +203,7 @@ export default function CheckoutScreen() {
       setPricing(true)
       setPromoError(null)
       try {
-        const data = await calculatePricing(id, code ?? undefined)
+        const data = await calculatePricing(id, code ?? undefined, methodRef.current)
         // The basket may have changed while the server answered, replacing
         // this draft; its figures would price a basket that no longer exists.
         if (orderIdRef.current !== id) return
@@ -228,7 +260,7 @@ export default function CheckoutScreen() {
   // total here is always the total of what is actually in it. This used to
   // run once, and a basket edited afterwards kept its old price.
   useEffect(() => {
-    if (paidRef.current || paying || !address) return
+    if (paidRef.current || paying || (!address && !isPickup)) return
     if (draftBasketRef.current === basketKey) return
 
     // Said up front, instead of letting Firestore refuse the write with
@@ -263,8 +295,9 @@ export default function CheckoutScreen() {
       try {
         const id = await createOrder({
           lines,
-          address: addressToFirestore(address),
+          address: address ? addressToFirestore(address) : null,
           vertical: cartVertical(lines),
+          deliveryMethod: methodRef.current,
         })
         if (seq !== draftSeqRef.current || paidRef.current) {
           // Overtaken by a newer basket while this one was being written.
@@ -283,7 +316,19 @@ export default function CheckoutScreen() {
       }
     }
     void run()
-  }, [basketKey, lines, address, profile, paying, promoApplied, refreshPricing, draftAttempt])
+  }, [basketKey, lines, address, profile, paying, promoApplied, refreshPricing, draftAttempt, isPickup])
+
+  // Switching between delivery and pick-up reprices the same draft; the
+  // server moves it over and drops or restores the delivery fee.
+  const pricedMethod = useRef<DeliveryMethod>('delivery')
+  useEffect(() => {
+    if (!orderId || pricedMethod.current === deliveryMethod) return
+    // No address yet: nothing to price a delivery to. Adding one reprices.
+    if (deliveryMethod === 'delivery' && !address) return
+    pricedMethod.current = deliveryMethod
+    void refreshPricing(orderId, promoApplied)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryMethod, orderId])
 
   /** Writes the draft again for the same basket, after a failure worth retrying. */
   const retryDraft = () => {
@@ -474,7 +519,7 @@ export default function CheckoutScreen() {
       }
 
       if (method === 'wallet') {
-        await payWithWallet(orderId, promoApplied ?? undefined, pin, deliverAt)
+        await payWithWallet(orderId, promoApplied ?? undefined, pin, deliverAt, deliveryMethod)
         await onPaid(orderId)
         return
       }
@@ -489,7 +534,7 @@ export default function CheckoutScreen() {
         return
       }
 
-      const data = await startPaystack(orderId, promoApplied ?? undefined, deliverAt)
+      const data = await startPaystack(orderId, promoApplied ?? undefined, deliverAt, deliveryMethod)
       const url = asString(data.authorization_url ?? data.authorizationUrl)
       const reference = asString(data.reference)
       if (!url) throw new ApiError('Could not open the payment page.')
@@ -533,11 +578,34 @@ export default function CheckoutScreen() {
       <AppBar title="Checkout" subtitle={`${lines.length} item${lines.length === 1 ? '' : 's'}`} />
 
       <ScreenBody bottomGap="var(--gap-xxl)" padded>
+        {/* ── Delivery or pick-up ─────────────────────────────────────── */}
+        {pickupAllowed && (
+          <div role="radiogroup" aria-label="How you get it" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-sm)', marginTop: 'var(--gap-md)' }}>
+            <ModeTile active={!isPickup} onClick={() => setWantsPickup(false)} icon={<Bike size={18} aria-hidden />} title="Delivery" />
+            <ModeTile active={isPickup} onClick={() => setWantsPickup(true)} icon={<Store size={18} aria-hidden />} title="Pick-up · no delivery fee" />
+          </div>
+        )}
+
         {/* ── Address ────────────────────────────────────────────────── */}
         <div className="t-overline" style={{ margin: 'var(--gap-md) 0 var(--gap-sm)' }}>
-          Delivering to
+          {isPickup ? 'Collect from' : 'Delivering to'}
         </div>
-        {method === 'work' && membership?.office ? (
+        {isPickup && pickupStore ? (
+          <Card style={{ display: 'flex', gap: 'var(--gap-md)', alignItems: 'center' }}>
+            <Store size={20} aria-hidden style={{ color: 'var(--color-brand)', flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span className="t-h4 clamp-1" style={{ display: 'block' }}>{pickupStore.name}</span>
+              {[pickupStore.address, pickupStore.city].filter(Boolean).length > 0 && (
+                <span className="t-caption clamp-2" style={{ display: 'block' }}>
+                  {[pickupStore.address, pickupStore.city].filter(Boolean).join(', ')}
+                </span>
+              )}
+              <span className="t-caption" style={{ display: 'block', marginTop: 4, color: 'var(--color-brand)' }}>
+                We tell you when it is ready. Show your pick-up code at the counter to collect.
+              </span>
+            </span>
+          </Card>
+        ) : method === 'work' && membership?.office ? (
           <Card style={{ display: 'flex', gap: 'var(--gap-md)', alignItems: 'center' }}>
             <Briefcase size={20} aria-hidden style={{ color: 'var(--color-brand)', flexShrink: 0 }} />
             <span style={{ flex: 1, minWidth: 0 }}>
@@ -837,7 +905,7 @@ export default function CheckoutScreen() {
         <Card style={{ marginTop: 'var(--gap-xl)' }}>
           <SummaryRow label="Subtotal" value={money(subtotal)} />
           <SummaryRow
-            label="Delivery"
+            label={isPickup ? 'Pick-up' : 'Delivery'}
             value={pricing ? '…' : deliveryFee <= 0 ? 'Free' : money(deliveryFee)}
             valueColor={!pricing && deliveryFee <= 0 ? 'var(--color-success)' : undefined}
           />
@@ -922,7 +990,7 @@ export default function CheckoutScreen() {
                     : `Pay ${money(total)}`
             }
             busy={paying}
-            disabled={pricing || !orderId || !address || (method === 'work' && (quoting || !quote?.ok))}
+            disabled={pricing || !orderId || (!address && !isPickup) || (method === 'work' && (quoting || !quote?.ok))}
             glow
             onClick={() => void pay()}
           />

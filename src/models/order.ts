@@ -109,7 +109,42 @@ export function stageSpec(o: BlorbOrder): StageSpec {
       step: 0,
     }
   }
+  if (o.pickup) {
+    const where = o.pickupPoint?.storeName || o.storeName || 'the store'
+    if (o.stage === 'ready') {
+      return { ...ORDER_STAGES.ready, title: 'Ready for pick-up', blurb: `Go to ${where} and show your pick-up code.` }
+    }
+    if (o.stage === 'delivered') {
+      return { ...ORDER_STAGES.delivered, title: 'Collected', blurb: 'Enjoy. Thanks for ordering with Blorbmart.' }
+    }
+    if (o.stage === 'placed' || o.stage === 'confirmed' || o.stage === 'preparing') {
+      return { ...ORDER_STAGES[o.stage], blurb: `${ORDER_STAGES[o.stage].blurb} You will collect it from ${where}.` }
+    }
+  }
   return ORDER_STAGES[o.stage]
+}
+
+/** Where a pick-up order is collected, copied from the store when it was placed. */
+export interface PickupPoint {
+  storeName: string
+  address: string
+  phone: string
+  latitude: number | null
+  longitude: number | null
+}
+
+function pickupPointFromMap(raw: unknown): PickupPoint | null {
+  if (!raw || typeof raw !== 'object') return null
+  const m = raw as Record<string, unknown>
+  const lat = Number(m.latitude)
+  const lng = Number(m.longitude)
+  return {
+    storeName: asString(m.storeName),
+    address: asString(m.address),
+    phone: asString(m.phone),
+    latitude: Number.isFinite(lat) && m.latitude != null ? lat : null,
+    longitude: Number.isFinite(lng) && m.longitude != null ? lng : null,
+  }
 }
 
 export function stageFromId(raw: unknown): OrderStage {
@@ -303,6 +338,9 @@ export interface BlorbOrder {
    * can cancel for a full refund.
    */
   waitingForSlot: boolean
+  /** The customer collects it from the store; no rider, no delivery fee. */
+  pickup: boolean
+  pickupPoint: PickupPoint | null
 }
 
 export function orderFromMap(id: string, m: Record<string, unknown>): BlorbOrder {
@@ -359,6 +397,8 @@ export function orderFromMap(id: string, m: Record<string, unknown>): BlorbOrder
     scheduledFor: ['scheduled', 'preorder'].includes(asString(m.fulfillmentType)) ? asDate(m.scheduledFor) : null,
     scheduledLabel: ['scheduled', 'preorder'].includes(asString(m.fulfillmentType)) ? asString(m.scheduledLabel) : '',
     waitingForSlot: asString(m.orderStatus ?? m.status).toLowerCase() === 'scheduled',
+    pickup: asString(m.deliveryMethod).toLowerCase() === 'pickup',
+    pickupPoint: pickupPointFromMap(m.pickupPoint),
   }
 }
 
