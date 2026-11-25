@@ -236,7 +236,8 @@ export function ItemSheet({
   const ctaLabel =
     unsatisfied.length > 0
       ? `Choose your ${unsatisfied[0].name.toLowerCase()}`
-      : `Add to basket · ${money(total)}`
+      : // Short, so the price survives a 360px phone beside the stepper.
+        `Add · ${money(total)}`
 
   return (
     <>
@@ -523,12 +524,17 @@ export function ItemSheet({
             </button>
           </div>
 
-          <Button
-            label={ctaLabel}
-            onClick={submit}
-            disabled={unsatisfied.length > 0}
-            glow
-          />
+          {/* The button is full width with one line of text. Beside the
+              stepper it must take only what is left, or a long label
+              ("Add to basket · ₦12,500") pushes it off the sheet. */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Button
+              label={ctaLabel}
+              onClick={submit}
+              disabled={unsatisfied.length > 0}
+              glow
+            />
+          </div>
         </div>
       </Sheet>
 
