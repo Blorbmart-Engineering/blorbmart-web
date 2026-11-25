@@ -107,6 +107,11 @@ comments because Vercel validates the file against a strict schema and
 rejects any property it does not recognise — including a `comment` key — so
 the reasoning lives here instead:
 
+For Vercel, set the project root to `blorbmart-web` and provide the `VITE_*`
+variables from `.env.example` in the Production environment before building.
+Vite embeds these values into the browser bundle at build time; changing them
+after a deployment requires a new web deployment.
+
 - **`/sw.js`** — `max-age=0, must-revalidate`, or a shipped fix sits behind a
   cached worker until the browser decides otherwise. `Service-Worker-Allowed:
   /` lets it control every route rather than just `/`.
